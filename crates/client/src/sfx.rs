@@ -106,4 +106,18 @@ pub fn play_local_sfx(
         commands.spawn((AudioPlayer::new(sfx.kill.clone()), settings));
         control.sfx_spawn = false;
     }
+    if control.sfx_gather {
+        let mut settings = PlaybackSettings::DESPAWN;
+        settings.volume = bevy::audio::Volume::Linear(0.4);
+        settings.speed = 0.9;
+        commands.spawn((AudioPlayer::new(sfx.gather.clone()), settings));
+        control.sfx_gather = false;
+    }
+    if control.sfx_block {
+        let mut settings = PlaybackSettings::DESPAWN;
+        settings.volume = bevy::audio::Volume::Linear(0.35);
+        settings.speed = 0.85;
+        commands.spawn((AudioPlayer::new(sfx.block.clone()), settings));
+        control.sfx_block = false;
+    }
 }

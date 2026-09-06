@@ -890,6 +890,7 @@ pub fn apply_predicted_starts(
         }
         return;
     };
+    let prev = control.pred_action;
     control.pred_action = start.action;
     control.pred_ticks = predicted_busy_ticks(&start) as f32;
     control.pred_loadout = if start.action == unbound_shared::ACTION_GATHER {
@@ -907,6 +908,12 @@ pub fn apply_predicted_starts(
         control.sfx_swing = 1;
     } else if start.action == ACTION_HEAVY {
         control.sfx_swing = 2;
+    }
+    if start.action == unbound_shared::ACTION_GATHER && prev != unbound_shared::ACTION_GATHER {
+        control.sfx_gather = true;
+    }
+    if start.action == ACTION_BLOCK && prev != ACTION_BLOCK {
+        control.sfx_block = true;
     }
     if start.action == ACTION_DODGE {
         control.sfx_dodge = true;

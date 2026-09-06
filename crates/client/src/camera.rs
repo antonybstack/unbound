@@ -53,6 +53,8 @@ pub struct ControlState {
     pub sfx_foot: bool,
     pub foot_accum: f32,
     pub sfx_spawn: bool,
+    pub sfx_gather: bool,
+    pub sfx_block: bool,
 }
 
 impl Default for ControlState {
@@ -83,6 +85,8 @@ impl Default for ControlState {
             sfx_foot: false,
             foot_accum: 0.2,
             sfx_spawn: false,
+            sfx_gather: false,
+            sfx_block: false,
         }
     }
 }
