@@ -3,10 +3,12 @@ use bevy::prelude::*;
 use bevy::window::{CursorGrabMode, CursorOptions};
 
 use crate::{LocalPlayer, MainCamera};
-use unbound_shared::{ACTION_NONE, MAX_STAMINA, PLAYER_HEIGHT};
+use unbound_shared::{
+    ACTION_NONE, CAM_SHEATHED, CAM_SHOULDER, MAX_STAMINA, PLAYER_HEIGHT, camera_distance,
+    camera_shake_amp, lock_focus_xz,
+};
 
 const LOOK_SENS: f32 = 0.004;
-const CAMERA_DISTANCE: f32 = 6.8;
 
 #[derive(Resource)]
 pub struct ControlState {
@@ -24,6 +26,9 @@ pub struct ControlState {
     pub pred_ticks: f32,
     pub pred_stamina: f32,
     pub pred_loadout: u8,
+    pub cam_dist: f32,
+    pub shake: f32,
+    pub lock_focus: Option<Vec3>,
 }
 
 impl Default for ControlState {
@@ -43,6 +48,9 @@ impl Default for ControlState {
             pred_ticks: 0.0,
             pred_stamina: MAX_STAMINA,
             pred_loadout: 0,
+            cam_dist: CAM_SHEATHED,
+            shake: 0.0,
+            lock_focus: None,
         }
     }
 }
@@ -67,12 +75,14 @@ pub fn update_cursor(
 }
 
 pub fn update_camera(
+    time: Res<Time>,
     mut motion: MessageReader<MouseMotion>,
     buttons: Res<ButtonInput<MouseButton>>,
     mut control: ResMut<ControlState>,
     mut camera: Query<&mut Transform, With<MainCamera>>,
     local: Query<&Transform, (With<LocalPlayer>, Without<MainCamera>)>,
 ) {
+    let dt = time.delta_secs();
     let looking = control.drawn || buttons.pressed(MouseButton::Right);
     if looking {
         for ev in motion.read() {
@@ -89,13 +99,42 @@ pub fn update_camera(
     let Ok(mut camera) = camera.single_mut() else {
         return;
     };
-    let focus = local
+    let player = local
         .single()
         .ok()
         .map(|t| t.translation)
         .unwrap_or(Vec3::new(0.0, PLAYER_HEIGHT * 0.5, 0.0));
+    let want = camera_distance(control.drawn, control.lock_on);
+    let blend = (8.0 * dt).min(1.0);
+    control.cam_dist += (want - control.cam_dist) * blend;
+    control.shake = (control.shake - dt).max(0.0);
+
+    let mut focus = player;
+    if control.lock_on {
+        if let Some(target) = control.lock_focus {
+            let (fx, fz) = lock_focus_xz(
+                player.x,
+                player.z,
+                target.x,
+                target.z,
+                unbound_shared::CAM_LOCK_MIX,
+            );
+            focus = Vec3::new(fx, player.y + 0.12, fz);
+        }
+    }
+    let amp = camera_shake_amp(control.shake);
+    if amp > 0.0 {
+        let w = control.shake * 70.0;
+        focus += Vec3::new(w.sin() * amp, (w * 1.3).cos() * amp * 0.6, 0.0);
+    }
+
     let rot = Quat::from_euler(EulerRot::YXZ, control.yaw, control.pitch, 0.0);
-    let offset = rot * Vec3::new(0.0, 0.0, CAMERA_DISTANCE);
+    let shoulder = if control.drawn {
+        Vec3::new(CAM_SHOULDER, 0.0, 0.0)
+    } else {
+        Vec3::ZERO
+    };
+    let offset = rot * (Vec3::new(0.0, 0.0, control.cam_dist) + shoulder);
     camera.translation = focus + offset;
     camera.look_at(focus, Vec3::Y);
 }

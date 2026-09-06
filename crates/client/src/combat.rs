@@ -34,6 +34,8 @@ pub struct Nameplate {
 #[derive(Component)]
 pub struct ShotPawn {
     pub id: u32,
+    pub vx: f32,
+    pub vz: f32,
 }
 
 #[derive(Component)]
@@ -330,36 +332,56 @@ pub fn sync_projectiles(
     mut updates: ReadUpdateMessage<Projectile>,
     mut deletes: ReadDeleteMessage<Projectile>,
     conn: Option<Res<StdbConn>>,
-    mut shots: Query<(Entity, &ShotPawn, &mut Transform)>,
+    mut shots: Query<(Entity, &mut ShotPawn, &mut Transform)>,
 ) {
     if let Some(conn) = conn.as_ref() {
         for row in conn.db().projectile().iter() {
-            if shots.iter().any(|(_, s, _)| s.id == row.id) {
+            if shots.iter_mut().any(|(_, s, _)| s.id == row.id) {
                 continue;
             }
             spawn_shot(&mut commands, &mut meshes, &mut materials, &row);
         }
     }
     for msg in inserts.read() {
-        if shots.iter().any(|(_, s, _)| s.id == msg.row.id) {
+        if shots.iter_mut().any(|(_, s, _)| s.id == msg.row.id) {
             continue;
         }
         spawn_shot(&mut commands, &mut meshes, &mut materials, &msg.row);
     }
     for msg in updates.read() {
-        for (_, shot, mut transform) in &mut shots {
+        for (_, mut shot, mut transform) in &mut shots {
             if shot.id == msg.new.id {
+                shot.vx = msg.new.vx;
+                shot.vz = msg.new.vz;
                 transform.translation = Vec3::new(msg.new.x, 1.1, msg.new.z);
+                aim_shot(&mut transform, shot.vx, shot.vz);
             }
         }
     }
     for msg in deletes.read() {
-        for (e, shot, _) in &shots {
+        for (e, shot, _) in &mut shots {
             if shot.id == msg.row.id {
                 commands.entity(e).despawn();
             }
         }
     }
+}
+
+pub fn fly_shots(time: Res<Time>, mut shots: Query<(&ShotPawn, &mut Transform)>) {
+    let dt = time.delta_secs();
+    for (shot, mut transform) in &mut shots {
+        transform.translation.x += shot.vx * dt;
+        transform.translation.z += shot.vz * dt;
+        aim_shot(&mut transform, shot.vx, shot.vz);
+    }
+}
+
+fn aim_shot(transform: &mut Transform, vx: f32, vz: f32) {
+    if vx * vx + vz * vz < 1e-6 {
+        return;
+    }
+    let yaw = (-vx).atan2(-vz);
+    transform.rotation = Quat::from_rotation_y(yaw);
 }
 
 pub fn sync_nodes(
@@ -513,6 +535,7 @@ pub fn flash_hits(
     mut local: Query<&mut Transform, With<LocalPlayer>>,
     conn: Option<Res<StdbConn>>,
     mut flash: ResMut<HitFlash>,
+    mut control: ResMut<ControlState>,
     mut commands: Commands,
     camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
 ) {
@@ -520,13 +543,19 @@ pub fn flash_hits(
     let cam = camera.single().ok();
     for msg in events.read() {
         let row = &msg.row;
-        if (row.kind == 1 || row.kind == 2) && me == Some(row.target) && !row.target_is_dummy {
-            if let Ok(mut t) = local.single_mut() {
-                t.translation.x = row.x;
-                t.translation.z = row.z;
-                t.translation.y = PLAYER_HEIGHT * 0.5 + 0.06;
+        let involved = me == Some(row.target) || me == Some(row.attacker);
+        if (row.kind == 1 || row.kind == 2) && involved {
+            if me == Some(row.target) && !row.target_is_dummy {
+                if let Ok(mut t) = local.single_mut() {
+                    t.translation.x = row.x;
+                    t.translation.z = row.z;
+                    t.translation.y = PLAYER_HEIGHT * 0.5 + 0.06;
+                }
+                flash.t = 0.16;
+                control.shake = control.shake.max(0.16);
+            } else if me == Some(row.attacker) && !row.attacker_is_dummy {
+                control.shake = control.shake.max(0.08);
             }
-            flash.t = 0.16;
         }
         if let Some((cam, cam_tf)) = cam {
             if let Ok(screen) = cam.world_to_viewport(cam_tf, Vec3::new(row.x, 1.9, row.z)) {
@@ -937,20 +966,32 @@ fn spawn_shot(
     materials: &mut Assets<StandardMaterial>,
     shot: &Projectile,
 ) {
-    let color = if shot.skill == 2 {
+    let staff = shot.skill == 2;
+    let color = if staff {
         Color::srgb(0.55, 0.35, 0.95)
     } else {
         Color::srgb(0.85, 0.7, 0.25)
     };
+    let mesh = if staff {
+        meshes.add(Sphere::new(0.14))
+    } else {
+        meshes.add(Cuboid::new(0.07, 0.07, 0.55))
+    };
+    let mut tf = Transform::from_xyz(shot.x, 1.1, shot.z);
+    aim_shot(&mut tf, shot.vx, shot.vz);
     commands.spawn((
-        Mesh3d(meshes.add(Sphere::new(0.12))),
+        Mesh3d(mesh),
         MeshMaterial3d(materials.add(StandardMaterial {
             base_color: color,
             emissive: LinearRgba::from(color) * 4.0,
             ..default()
         })),
-        Transform::from_xyz(shot.x, 1.1, shot.z),
-        ShotPawn { id: shot.id },
+        tf,
+        ShotPawn {
+            id: shot.id,
+            vx: shot.vx,
+            vz: shot.vz,
+        },
     ));
 }
 

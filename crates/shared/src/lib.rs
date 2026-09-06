@@ -390,6 +390,35 @@ mod tests {
     }
 
     #[test]
+    fn camera_closes_when_drawn() {
+        assert!((camera_distance(false, false) - CAM_SHEATHED).abs() < 1e-4);
+        assert!(camera_distance(true, false) < camera_distance(false, false));
+        assert!((camera_distance(true, true) - CAM_LOCK).abs() < 1e-4);
+    }
+
+    #[test]
+    fn lock_focus_sits_between() {
+        let (x, z) = lock_focus_xz(0.0, 0.0, 10.0, 0.0, 0.3);
+        assert!((x - 3.0).abs() < 1e-3);
+        assert!(z.abs() < 1e-4);
+    }
+
+    #[test]
+    fn dummy_holds_the_pocket() {
+        assert_eq!(dummy_move_dir(4.0), 1.0);
+        assert_eq!(dummy_move_dir(2.0), 0.0);
+        assert_eq!(dummy_move_dir(1.2), -1.0);
+    }
+
+    #[test]
+    fn hp_does_not_regen_through_a_combo() {
+        assert!(!hp_regen_ok(ACTION_HIT));
+        assert!(!hp_regen_ok(ACTION_LIGHT));
+        assert!(!hp_regen_ok(ACTION_BLOCK));
+        assert!(hp_regen_ok(ACTION_NONE));
+    }
+
+    #[test]
     fn block_only_on_sword() {
         assert!(
             start_drawn_action(ACTION_NONE, LOADOUT_BOW, LOADOUT_BOW, 100.0, BTN_BLOCK).is_none()

@@ -12,7 +12,7 @@ use unbound_shared::{
 
 use crate::camera::{ControlState, update_camera, update_cursor};
 use crate::combat::{
-    DummyPawn, HitFlash, LocalVitals, WeaponState, apply_predicted_starts, flash_hits,
+    DummyPawn, HitFlash, LocalVitals, WeaponState, apply_predicted_starts, flash_hits, fly_shots,
     interpolate_dummy, pose_dummy_club, pose_hp_bars, pose_weapons, refresh_remote_weapons,
     refresh_weapon, subscribe_world, sync_dummy, sync_nameplates, sync_nodes, sync_projectiles,
     sync_vitals, tick_dummy_pose, tick_hit_flash, tick_prediction, update_floaters,
@@ -103,6 +103,7 @@ fn main() {
                     interpolate_dummy,
                     pose_hp_bars,
                     sync_projectiles,
+                    fly_shots,
                     sync_nodes,
                     sync_vitals,
                     flash_hits,
@@ -381,8 +382,13 @@ fn read_combat_input(
                 let dx = pos.x - me.translation.x;
                 let dz = pos.z - me.translation.z;
                 control.yaw = (-dx).atan2(-dz);
+                control.lock_focus = Some(pos);
+            } else {
+                control.lock_focus = None;
             }
         }
+    } else {
+        control.lock_focus = None;
     }
 
     let mut buttons = 0u32;

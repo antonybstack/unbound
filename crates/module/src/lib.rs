@@ -3,7 +3,8 @@ use std::time::Duration;
 use spacetimedb::{table, Identity, ReducerContext, ScheduleAt, Table};
 use unbound_shared::{
     action_busy, blocking, dist_xz, dodge_burst_dt, dodge_dir, dummy_cooldown_ticks,
-    dummy_heavy_windup, dummy_light_windup, facing_dot, hitstun_ticks, integrate, invulnerable,
+    dummy_heavy_windup, dummy_light_windup, dummy_move_dir, facing_dot, hitstun_ticks, hp_regen_ok,
+    integrate, invulnerable,
     knockback, loadout, move_lock, node_respawn_ticks, node_xp, push_apart, scaled_damage,
     skill_for_loadout, skill_level, start_drawn_action, start_gather_action, yaw_forward,
     ACTION_BLOCK, ACTION_DEAD, ACTION_DODGE, ACTION_GATHER, ACTION_HEAVY, ACTION_HIT, ACTION_LIGHT,
@@ -389,7 +390,7 @@ fn tick_players(ctx: &ReducerContext) {
         } else if player.action != ACTION_DODGE && player.action != ACTION_BLOCK {
             player.stamina = (player.stamina + STAMINA_REGEN_PER_SEC * TICK_DT).min(MAX_STAMINA);
         }
-        if player.hp < MAX_HP {
+        if player.hp < MAX_HP && hp_regen_ok(player.action) {
             player.hp = (player.hp + HP_REGEN_PER_SEC * TICK_DT).min(MAX_HP);
         }
 
@@ -603,15 +604,20 @@ fn tick_dummy(ctx: &ReducerContext) {
     if let Some((d, _px, _pz, yaw)) = nearest {
         dummy.yaw = yaw;
         let chase = d < DUMMY_AGGRO_RANGE && home_d < DUMMY_LEASH_RANGE;
-        if chase && d > 2.05 && dummy.action_ticks == 0 {
+        let pocket = dummy_move_dir(d);
+        if chase && dummy.action_ticks == 0 && pocket.abs() > 0.01 {
             let (x, z) = integrate(
                 dummy.x,
                 dummy.z,
                 dummy.yaw,
                 0.0,
-                1.0,
+                pocket,
                 TICK_DT,
-                DUMMY_CHASE_SPEED,
+                if pocket > 0.0 {
+                    DUMMY_CHASE_SPEED
+                } else {
+                    DUMMY_HOME_SPEED
+                },
             );
             dummy.x = x;
             dummy.z = z;

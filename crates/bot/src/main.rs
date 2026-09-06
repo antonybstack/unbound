@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 use spacetimedb_sdk::{DbContext, Identity, Table};
 use unbound_shared::{
     ACTION_HEAVY, ACTION_LIGHT, BTN_BLOCK, BTN_DODGE, BTN_INTERACT, BTN_LIGHT, BTN_SPRINT,
-    GATHER_RANGE, LOADOUT_SWORD, dist_xz,
+    GATHER_RANGE, LOADOUT_BOW, LOADOUT_SWORD, dist_xz,
 };
 
 use crate::module_bindings::*;
@@ -18,6 +18,7 @@ enum Mode {
     Dummy,
     Pvp,
     Gather,
+    Bow,
 }
 
 fn main() {
@@ -135,12 +136,18 @@ fn think(mode: Mode, conn: &DbConnection, me: &Player) -> (f32, f32, bool, u32, 
     }
     match mode {
         Mode::Gather => think_gather(conn, me),
-        Mode::Dummy => think_fight(conn, me, true),
-        Mode::Pvp => think_fight(conn, me, false),
+        Mode::Dummy => think_fight(conn, me, true, false),
+        Mode::Pvp => think_fight(conn, me, false, false),
+        Mode::Bow => think_fight(conn, me, true, true),
     }
 }
 
-fn think_fight(conn: &DbConnection, me: &Player, dummy_only: bool) -> (f32, f32, bool, u32, u8) {
+fn think_fight(
+    conn: &DbConnection,
+    me: &Player,
+    dummy_only: bool,
+    ranged: bool,
+) -> (f32, f32, bool, u32, u8) {
     let mut target: Option<(f32, f32, f32, u8)> = None; // x, z, dist, action
     if !dummy_only {
         for p in conn.db().player().iter() {
@@ -167,10 +174,27 @@ fn think_fight(conn: &DbConnection, me: &Player, dummy_only: bool) -> (f32, f32,
     };
     let yaw = (-(tx - me.x)).atan2(-(tz - me.z));
     let swinging = action == ACTION_LIGHT || action == ACTION_HEAVY;
-    let in_range = dist < 2.15;
-    let dir_z = if swinging || in_range { 0.0 } else { 1.0 };
+    let loadout = if ranged { LOADOUT_BOW } else { LOADOUT_SWORD };
+    let in_range = if ranged {
+        dist < 12.0
+    } else {
+        dist < 2.15
+    };
+    let dir_z = if ranged {
+        if dist > 9.0 {
+            1.0
+        } else if dist < 5.5 {
+            -1.0
+        } else {
+            0.0
+        }
+    } else if swinging || in_range {
+        0.0
+    } else {
+        1.0
+    };
     let mut buttons = 0u32;
-    if swinging && dist < 3.2 {
+    if !ranged && swinging && dist < 3.2 {
         if action == ACTION_HEAVY {
             buttons |= BTN_DODGE;
         } else {
@@ -181,7 +205,7 @@ fn think_fight(conn: &DbConnection, me: &Player, dummy_only: bool) -> (f32, f32,
     } else if dist > 6.0 {
         buttons |= BTN_SPRINT;
     }
-    (yaw, dir_z, true, buttons, LOADOUT_SWORD)
+    (yaw, dir_z, true, buttons, loadout)
 }
 
 fn think_gather(conn: &DbConnection, me: &Player) -> (f32, f32, bool, u32, u8) {
@@ -234,13 +258,14 @@ impl Args {
                     mode = match it.next().unwrap_or_default().as_str() {
                         "dummy" => Mode::Dummy,
                         "gather" => Mode::Gather,
+                        "bow" => Mode::Bow,
                         _ => Mode::Pvp,
                     }
                 }
                 "--seconds" => seconds = it.next().and_then(|s| s.parse().ok()).unwrap_or(seconds),
                 "-h" | "--help" => {
                     eprintln!(
-                        "unbound-bot --name NAME --token PATH --mode pvp|dummy|gather --seconds N"
+                        "unbound-bot --name NAME --token PATH --mode pvp|dummy|gather|bow --seconds N"
                     );
                     std::process::exit(0);
                 }

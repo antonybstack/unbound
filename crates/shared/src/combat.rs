@@ -149,6 +149,15 @@ pub const DUMMY_CHASE_SPEED: f32 = 3.2;
 pub const DUMMY_HOME_SPEED: f32 = 3.6;
 pub const DUMMY_LIGHT_DAMAGE: f32 = 11.0;
 pub const DUMMY_HEAVY_DAMAGE: f32 = 20.0;
+pub const DUMMY_KEEP_OUT: f32 = 1.75;
+pub const DUMMY_APPROACH: f32 = 2.35;
+
+pub const CAM_SHEATHED: f32 = 6.8;
+pub const CAM_DRAWN: f32 = 4.35;
+pub const CAM_LOCK: f32 = 5.15;
+pub const CAM_LOCK_MIX: f32 = 0.32;
+pub const CAM_SHOULDER: f32 = 0.42;
+pub const CAM_SHAKE_TIME: f32 = 0.16;
 
 pub fn dummy_light_windup() -> u8 {
     12
@@ -168,6 +177,41 @@ pub fn dummy_windup_ticks(action: u8) -> u8 {
     } else {
         dummy_light_windup()
     }
+}
+
+/// +1 chase, 0 hold the pocket, -1 step back. Dummy should not glue to the player.
+pub fn dummy_move_dir(dist: f32) -> f32 {
+    if dist > DUMMY_APPROACH {
+        1.0
+    } else if dist < DUMMY_KEEP_OUT {
+        -1.0
+    } else {
+        0.0
+    }
+}
+
+pub fn camera_distance(drawn: bool, lock_on: bool) -> f32 {
+    if lock_on {
+        CAM_LOCK
+    } else if drawn {
+        CAM_DRAWN
+    } else {
+        CAM_SHEATHED
+    }
+}
+
+pub fn lock_focus_xz(px: f32, pz: f32, tx: f32, tz: f32, mix: f32) -> (f32, f32) {
+    let mix = mix.clamp(0.0, 1.0);
+    (px + (tx - px) * mix, pz + (tz - pz) * mix)
+}
+
+pub fn camera_shake_amp(t: f32) -> f32 {
+    let a = (t / CAM_SHAKE_TIME).clamp(0.0, 1.0);
+    a * a * 0.16
+}
+
+pub fn hp_regen_ok(action: u8) -> bool {
+    !action_busy(action) && action != ACTION_BLOCK
 }
 
 pub fn merge_input_buttons(held: u32, latched: u32) -> u32 {
