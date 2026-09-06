@@ -55,3 +55,20 @@ pub fn play_combat_sfx(
         commands.spawn((AudioPlayer::new(handle), PlaybackSettings::DESPAWN));
     }
 }
+
+pub fn play_local_sfx(
+    mut commands: Commands,
+    sfx: Option<Res<Sfx>>,
+    mut control: ResMut<crate::camera::ControlState>,
+) {
+    let Some(sfx) = sfx else {
+        return;
+    };
+    if control.sfx_dodge {
+        commands.spawn((
+            AudioPlayer::new(sfx.dodge.clone()),
+            PlaybackSettings::DESPAWN,
+        ));
+        control.sfx_dodge = false;
+    }
+}

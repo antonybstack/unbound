@@ -874,6 +874,7 @@ pub fn apply_predicted_starts(
         control.pred_shot = true;
     }
     if start.action == ACTION_DODGE {
+        control.sfx_dodge = true;
         if let Ok(mut transform) = local.single_mut() {
             let (dx, dz) = dodge_dir(control.dir_x, control.dir_z);
             let (x, z) = integrate(

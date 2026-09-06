@@ -34,6 +34,7 @@ pub struct ControlState {
     pub lock_focus: Option<Vec3>,
     pub pred_shot: bool,
     pub hitstop: f32,
+    pub sfx_dodge: bool,
 }
 
 impl Default for ControlState {
@@ -58,6 +59,7 @@ impl Default for ControlState {
             lock_focus: None,
             pred_shot: false,
             hitstop: 0.0,
+            sfx_dodge: false,
         }
     }
 }
