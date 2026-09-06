@@ -1,0 +1,16 @@
+[package]
+name = "unbound-module"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+
+# Own workspace so `spacetime publish` does not try to compile the Bevy client to WASM.
+[workspace]
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+spacetimedb = "2.10"
+log = "0.4"
+unbound-shared = { path = "../shared" }

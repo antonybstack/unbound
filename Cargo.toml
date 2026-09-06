@@ -1,0 +1,17 @@
+[workspace]
+resolver = "2"
+members = ["crates/shared", "crates/client"]
+exclude = ["crates/module"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+
+[workspace.dependencies]
+spacetimedb = "2.10"
+spacetimedb-sdk = "2.10"
+log = "0.4"
+bevy = "0.19"
+bevy_stdb = "0.13"
+unbound-shared = { path = "crates/shared" }

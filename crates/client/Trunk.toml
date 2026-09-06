@@ -1,0 +1,12 @@
+[build]
+target = "index.html"
+dist = "dist"
+filehash = false
+
+[watch]
+watch = [".", "../shared"]
+
+[serve]
+address = "127.0.0.1"
+port = 8080
+open = false
