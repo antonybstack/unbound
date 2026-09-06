@@ -55,6 +55,7 @@ pub struct ControlState {
     pub sfx_spawn: bool,
     pub sfx_gather: bool,
     pub sfx_block: bool,
+    pub sfx_dummy: u8,
 }
 
 impl Default for ControlState {
@@ -87,6 +88,7 @@ impl Default for ControlState {
             sfx_spawn: false,
             sfx_gather: false,
             sfx_block: false,
+            sfx_dummy: 0,
         }
     }
 }

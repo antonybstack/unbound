@@ -5,9 +5,9 @@ use unbound_shared::{
     BTN_BLOCK, BTN_DODGE, BTN_HEAVY, BTN_LIGHT, BTN_SPRINT, DODGE_SPEED, GATHER_RANGE, MAX_HP,
     MAX_STAMINA, MOVE_SPEED, PLAYER_HEIGHT, SHOT_CEILING_Y, SHOT_GROUND_Y, SHOT_SPAWN_Y,
     SPRINT_STAMINA_PER_SEC, STAMINA_REGEN_PER_SEC, TICK_HZ, aim_dir, dodge_burst_dt, dodge_dir,
-    dummy_club_pitch, dummy_windup_ticks, integrate, invulnerable_for, loadout, melee_lunge_dt,
-    merge_input_buttons, predicted_busy_ticks, predicted_release_ticks, start_drawn_action,
-    start_gather_action, weapon_extra_rotation,
+    dummy_club_pitch, dummy_telegraph_started, dummy_windup_ticks, integrate, invulnerable_for,
+    loadout, melee_lunge_dt, merge_input_buttons, predicted_busy_ticks, predicted_release_ticks,
+    start_drawn_action, start_gather_action, weapon_extra_rotation,
 };
 
 use crate::camera::ControlState;
@@ -86,6 +86,7 @@ pub struct DummyPose {
     pub action_ticks: f32,
     pub hp: f32,
     pub alive: bool,
+    pub pending_hit: bool,
 }
 
 #[derive(Resource, Default)]
@@ -194,6 +195,7 @@ pub fn sync_dummy(
     mut updates: ReadUpdateMessage<Dummy>,
     mut deletes: ReadDeleteMessage<Dummy>,
     conn: Option<Res<StdbConn>>,
+    mut control: ResMut<ControlState>,
     mut dummies: Query<(
         Entity,
         &mut DummyPose,
@@ -212,6 +214,14 @@ pub fn sync_dummy(
     }
     for msg in updates.read() {
         for (_e, mut pose, mat) in &mut dummies {
+            if let Some(kind) = dummy_telegraph_started(
+                pose.action,
+                pose.pending_hit,
+                msg.new.action,
+                msg.new.pending_hit,
+            ) {
+                control.sfx_dummy = if kind == ACTION_HEAVY { 2 } else { 1 };
+            }
             pose.x = msg.new.x;
             pose.z = msg.new.z;
             pose.yaw = msg.new.yaw;
@@ -219,6 +229,7 @@ pub fn sync_dummy(
             pose.action_ticks = msg.new.action_ticks as f32;
             pose.hp = msg.new.hp;
             pose.alive = msg.new.alive;
+            pose.pending_hit = msg.new.pending_hit;
             if let Some(mut m) = materials.get_mut(&mat.0) {
                 m.base_color = dummy_color(pose.action, pose.alive);
             }
@@ -1465,6 +1476,7 @@ fn spawn_dummy(
                 action_ticks: dummy.action_ticks as f32,
                 hp: dummy.hp,
                 alive: dummy.alive,
+                pending_hit: dummy.pending_hit,
             },
         ))
         .id();

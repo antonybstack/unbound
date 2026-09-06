@@ -523,6 +523,27 @@ mod tests {
     }
 
     #[test]
+    fn dummy_telegraph_fires_once_per_windup() {
+        assert_eq!(
+            dummy_telegraph_started(ACTION_NONE, false, ACTION_LIGHT, true),
+            Some(ACTION_LIGHT)
+        );
+        assert_eq!(
+            dummy_telegraph_started(ACTION_LIGHT, true, ACTION_LIGHT, true),
+            None
+        );
+        assert_eq!(
+            dummy_telegraph_started(ACTION_LIGHT, true, ACTION_HIT, false),
+            None
+        );
+        assert_eq!(
+            dummy_telegraph_started(ACTION_HIT, false, ACTION_HEAVY, true),
+            Some(ACTION_HEAVY)
+        );
+        assert!(dummy_telegraph_started(ACTION_NONE, false, ACTION_LIGHT, false).is_none());
+    }
+
+    #[test]
     fn gather_requires_range_and_button() {
         assert!(start_gather_action(ACTION_NONE, BTN_INTERACT, false).is_none());
         let start = start_gather_action(ACTION_NONE, BTN_INTERACT, true).unwrap();

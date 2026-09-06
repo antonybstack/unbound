@@ -300,6 +300,25 @@ pub fn dummy_windup_ticks(action: u8) -> u8 {
     }
 }
 
+/// Club raise just committed. None while the same windup is still pending.
+pub fn dummy_telegraph_started(
+    prev_action: u8,
+    prev_pending: bool,
+    new_action: u8,
+    new_pending: bool,
+) -> Option<u8> {
+    if !new_pending {
+        return None;
+    }
+    if new_action != ACTION_LIGHT && new_action != ACTION_HEAVY {
+        return None;
+    }
+    if prev_pending && prev_action == new_action {
+        return None;
+    }
+    Some(new_action)
+}
+
 /// +1 chase, 0 hold the pocket, -1 step back. Dummy should not glue to the player.
 pub fn dummy_move_dir(dist: f32) -> f32 {
     if dist > DUMMY_APPROACH {
