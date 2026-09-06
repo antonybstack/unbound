@@ -27,6 +27,9 @@ pub struct ServerPose {
     pub z: f32,
     pub yaw: f32,
     pub drawn: bool,
+    pub loadout: u8,
+    pub hp: f32,
+    pub alive: bool,
 }
 
 pub fn connect(mut cmds: StdbCmds) {
@@ -95,6 +98,9 @@ pub fn apply_player_updates(
             pose.z = msg.new.z;
             pose.yaw = msg.new.yaw;
             pose.drawn = msg.new.drawn;
+            pose.loadout = msg.new.loadout;
+            pose.hp = msg.new.hp;
+            pose.alive = msg.new.alive;
             if local.is_some() {
                 // Keep prediction authoritative unless we have clearly desynced.
                 // Blending toward a delayed snapshot every tick makes WASD feel sticky.
@@ -216,6 +222,9 @@ fn spawn_pawn(
             z: player.z,
             yaw: player.yaw,
             drawn: player.drawn,
+            loadout: player.loadout,
+            hp: player.hp,
+            alive: player.alive,
         },
     ));
     if is_local {

@@ -20,12 +20,17 @@ pub const MAX_HP: f32 = 100.0;
 pub const MAX_STAMINA: f32 = 100.0;
 pub const STAMINA_REGEN_PER_SEC: f32 = 22.0;
 pub const HP_REGEN_PER_SEC: f32 = 1.5;
+pub const SPRINT_STAMINA_PER_SEC: f32 = 16.0;
+pub const KNOCKBACK_LIGHT: f32 = 0.45;
+pub const KNOCKBACK_HEAVY: f32 = 0.85;
+pub const BODY_SEPARATION: f32 = PLAYER_RADIUS * 2.0 + 0.2;
 
 pub const BTN_LIGHT: u32 = 1 << 0;
 pub const BTN_HEAVY: u32 = 1 << 1;
 pub const BTN_DODGE: u32 = 1 << 2;
 pub const BTN_BLOCK: u32 = 1 << 3;
 pub const BTN_SPRINT: u32 = 1 << 4;
+pub const BTN_INTERACT: u32 = 1 << 5;
 
 pub const ACTION_NONE: u8 = 0;
 pub const ACTION_LIGHT: u8 = 1;
@@ -35,16 +40,24 @@ pub const ACTION_BLOCK: u8 = 4;
 pub const ACTION_SWAP: u8 = 5;
 pub const ACTION_HIT: u8 = 6;
 pub const ACTION_DEAD: u8 = 7;
+pub const ACTION_GATHER: u8 = 8;
 
 pub const SKILL_MELEE: u8 = 0;
 pub const SKILL_RANGED: u8 = 1;
 pub const SKILL_MAGIC: u8 = 2;
 pub const SKILL_DEFENCE: u8 = 3;
 pub const SKILL_HITPOINTS: u8 = 4;
+pub const SKILL_GATHERING: u8 = 5;
 
 pub const LOADOUT_SWORD: u8 = 0;
 pub const LOADOUT_BOW: u8 = 1;
 pub const LOADOUT_STAFF: u8 = 2;
+
+pub const NODE_WOOD: u8 = 0;
+pub const NODE_ORE: u8 = 1;
+pub const GATHER_RANGE: f32 = 2.4;
+pub const NODE_WOOD_XP: u64 = 10;
+pub const NODE_ORE_XP: u64 = 14;
 
 /// Yaw 0 looks down -Z (Bevy camera default).
 pub fn yaw_forward(yaw: f32) -> (f32, f32) {
@@ -95,6 +108,47 @@ pub fn dist_xz(ax: f32, az: f32, bx: f32, bz: f32) -> f32 {
     (dx * dx + dz * dz).sqrt()
 }
 
+/// Push two discs apart so they sit at least `min_dist` from each other.
+/// Equal share. Identical positions split along +X.
+pub fn push_apart(ax: f32, az: f32, bx: f32, bz: f32, min_dist: f32) -> (f32, f32, f32, f32) {
+    let dx = bx - ax;
+    let dz = bz - az;
+    let d = (dx * dx + dz * dz).sqrt();
+    if d >= min_dist {
+        return (ax, az, bx, bz);
+    }
+    let (nx, nz) = if d < 1e-4 {
+        (1.0, 0.0)
+    } else {
+        (dx / d, dz / d)
+    };
+    let push = (min_dist - d) * 0.5;
+    let (ax, az) = clamp_world(ax - nx * push, az - nz * push);
+    let (bx, bz) = clamp_world(bx + nx * push, bz + nz * push);
+    (ax, az, bx, bz)
+}
+
+pub fn knockback(x: f32, z: f32, from_x: f32, from_z: f32, amount: f32) -> (f32, f32) {
+    let dx = x - from_x;
+    let dz = z - from_z;
+    let d = (dx * dx + dz * dz).sqrt();
+    let (nx, nz) = if d < 1e-3 {
+        (0.0, 1.0)
+    } else {
+        (dx / d, dz / d)
+    };
+    clamp_world(x + nx * amount, z + nz * amount)
+}
+
+pub fn facing_dot(yaw: f32, toward_x: f32, toward_z: f32) -> f32 {
+    let (fx, fz) = yaw_forward(yaw);
+    let mag = (toward_x * toward_x + toward_z * toward_z).sqrt();
+    if mag < 1e-4 {
+        return 1.0;
+    }
+    (toward_x / mag) * fx + (toward_z / mag) * fz
+}
+
 pub fn skill_level(xp: u64) -> u8 {
     // Fast OSRS-ish curve, capped at 50 for the yard.
     let lvl = (1.0 + (xp as f32 / 80.0).sqrt()).floor() as u32;
@@ -106,5 +160,96 @@ pub fn skill_for_loadout(loadout: u8) -> u8 {
         LOADOUT_BOW => SKILL_RANGED,
         LOADOUT_STAFF => SKILL_MAGIC,
         _ => SKILL_MELEE,
+    }
+}
+
+pub fn node_xp(kind: u8) -> u64 {
+    if kind == NODE_ORE {
+        NODE_ORE_XP
+    } else {
+        NODE_WOOD_XP
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn yaw_zero_looks_down_neg_z() {
+        let (x, z) = yaw_forward(0.0);
+        assert!(x.abs() < 1e-5);
+        assert!((z + 1.0).abs() < 1e-5);
+    }
+
+    #[test]
+    fn integrate_walks_forward() {
+        let (x, z) = integrate(0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 8.0);
+        assert!(x.abs() < 1e-4);
+        assert!((z + 8.0).abs() < 1e-3);
+    }
+
+    #[test]
+    fn world_clamp_holds() {
+        let (x, z) = clamp_world(100.0, -100.0);
+        let limit = WORLD_HALF - PLAYER_RADIUS;
+        assert!((x - limit).abs() < 1e-4);
+        assert!((z + limit).abs() < 1e-4);
+    }
+
+    #[test]
+    fn skill_curve_is_osrs_ish() {
+        assert_eq!(skill_level(0), 1);
+        assert_eq!(skill_level(80), 2);
+        assert_eq!(skill_level(720), 4);
+        assert_eq!(skill_level(80 * 49 * 49), 50);
+        assert_eq!(skill_level(u64::MAX), 50);
+    }
+
+    #[test]
+    fn scaled_damage_grows_with_level() {
+        let base = 14.0;
+        assert_eq!(scaled_damage(base, 1), 14.0);
+        assert!(scaled_damage(base, 10) > scaled_damage(base, 1));
+        assert!(scaled_damage(base, 50) > scaled_damage(base, 10));
+    }
+
+    #[test]
+    fn push_apart_separates_overlap() {
+        let (ax, az, bx, bz) = push_apart(0.0, 0.0, 0.1, 0.0, 1.0);
+        assert!((dist_xz(ax, az, bx, bz) - 1.0).abs() < 1e-3);
+    }
+
+    #[test]
+    fn push_apart_leaves_ok_pairs() {
+        let (ax, az, bx, bz) = push_apart(0.0, 0.0, 5.0, 0.0, 1.0);
+        assert_eq!((ax, az, bx, bz), (0.0, 0.0, 5.0, 0.0));
+    }
+
+    #[test]
+    fn knockback_pushes_away() {
+        let (x, z) = knockback(1.0, 0.0, 0.0, 0.0, 0.5);
+        assert!((x - 1.5).abs() < 1e-3);
+        assert!(z.abs() < 1e-3);
+    }
+
+    #[test]
+    fn action_flags() {
+        assert!(action_busy(ACTION_LIGHT));
+        assert!(action_busy(ACTION_GATHER));
+        assert!(action_busy(ACTION_DEAD));
+        assert!(!action_busy(ACTION_NONE));
+        assert!(move_lock(ACTION_HEAVY));
+        assert!(move_lock(ACTION_GATHER));
+        assert!(!move_lock(ACTION_LIGHT));
+        assert!(invulnerable(ACTION_DODGE));
+        assert!(blocking(ACTION_BLOCK));
+    }
+
+    #[test]
+    fn facing_requires_forward_cone() {
+        assert!(facing_dot(0.0, 0.0, -1.0) > 0.9);
+        assert!(facing_dot(0.0, 0.0, 1.0) < -0.9);
+        assert!(facing_dot(0.0, 1.0, 0.0).abs() < 0.1);
     }
 }

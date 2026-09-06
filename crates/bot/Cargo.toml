@@ -1,0 +1,13 @@
+[package]
+name = "unbound-bot"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "unbound-bot"
+path = "src/main.rs"
+
+[dependencies]
+unbound-shared.workspace = true
+spacetimedb-sdk.workspace = true

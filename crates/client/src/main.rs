@@ -6,22 +6,22 @@ mod net;
 use bevy::prelude::*;
 use bevy_stdb::prelude::*;
 use unbound_shared::{
-    BTN_BLOCK, BTN_DODGE, BTN_HEAVY, BTN_LIGHT, BTN_SPRINT, MAX_HP, MAX_STAMINA, PLAYER_HEIGHT,
-    loadout,
+    BTN_BLOCK, BTN_DODGE, BTN_HEAVY, BTN_INTERACT, BTN_LIGHT, BTN_SPRINT, GATHER_RANGE, MAX_HP,
+    MAX_STAMINA, PLAYER_HEIGHT, loadout,
 };
 
 use crate::camera::{ControlState, update_camera, update_cursor};
 use crate::combat::{
-    LocalVitals, WeaponState, flash_hits, refresh_weapon, subscribe_world, sync_dummy,
-    sync_projectiles, sync_vitals,
+    DummyPawn, LocalVitals, WeaponState, flash_hits, refresh_remote_weapons, refresh_weapon,
+    subscribe_world, sync_dummy, sync_nodes, sync_projectiles, sync_vitals,
 };
 use crate::module_bindings::{
     CharacterTableAccessor, CombatEventTableAccessor, DbConnection, DummyTableAccessor,
-    PlayerTableAccessor, ProjectileTableAccessor, RemoteModule,
+    GatherNodeTableAccessor, PlayerTableAccessor, ProjectileTableAccessor, RemoteModule,
 };
 use crate::net::{
-    LocalPlayer, apply_player_deletes, apply_player_inserts, apply_player_updates, connect,
-    interpolate_remotes, predict_local, send_input, spawn_pawns_from_cache,
+    LocalPlayer, RemotePlayer, apply_player_deletes, apply_player_inserts, apply_player_updates,
+    connect, interpolate_remotes, predict_local, send_input, spawn_pawns_from_cache,
 };
 
 pub type StdbConn = StdbConnection<DbConnection>;
@@ -35,6 +35,7 @@ pub enum SubKey {
     Projectiles,
     Characters,
     Events,
+    Nodes,
 }
 
 fn main() {
@@ -48,6 +49,7 @@ fn main() {
         .add_table::<DummyTableAccessor>()
         .add_table::<ProjectileTableAccessor>()
         .add_table::<CharacterTableAccessor>()
+        .add_table::<GatherNodeTableAccessor>()
         .add_event_table::<CombatEventTableAccessor>()
         .with_subscriptions::<SubKey>()
         .with_reconnect(StdbReconnectOptions::default());
@@ -91,15 +93,18 @@ fn main() {
                 interpolate_remotes,
                 sync_dummy,
                 sync_projectiles,
+                sync_nodes,
                 sync_vitals,
                 flash_hits,
                 read_combat_input,
                 predict_local,
                 send_input,
                 refresh_weapon,
+                refresh_remote_weapons,
                 update_cursor,
                 update_camera,
                 update_hud,
+                update_crosshair,
             )
                 .chain(),
         )
@@ -111,7 +116,19 @@ fn stdb_uri() -> String {
 }
 
 #[derive(Component)]
-struct HudText;
+struct HudTitle;
+#[derive(Component)]
+struct HudLog;
+#[derive(Component)]
+struct HpFill;
+#[derive(Component)]
+struct StamFill;
+#[derive(Component)]
+struct DummyHpFill;
+#[derive(Component)]
+struct Crosshair;
+#[derive(Component)]
+pub struct MainCamera;
 
 fn setup_scene(
     mut commands: Commands,
@@ -123,19 +140,33 @@ fn setup_scene(
         MeshMaterial3d(materials.add(Color::srgb(0.22, 0.28, 0.20))),
     ));
 
+    // PvP circle so the yard reads as a place, not an infinite lawn.
+    commands.spawn((
+        Mesh3d(meshes.add(Cylinder::new(16.0, 0.04))),
+        MeshMaterial3d(materials.add(StandardMaterial {
+            base_color: Color::srgb(0.18, 0.22, 0.16),
+            perceptual_roughness: 1.0,
+            ..default()
+        })),
+        Transform::from_xyz(0.0, 0.02, 0.0),
+    ));
+    commands.spawn((
+        Mesh3d(meshes.add(Cylinder::new(4.5, 0.05))),
+        MeshMaterial3d(materials.add(StandardMaterial {
+            base_color: Color::srgb(0.28, 0.24, 0.16),
+            perceptual_roughness: 1.0,
+            ..default()
+        })),
+        Transform::from_xyz(0.0, 0.03, 0.0),
+    ));
+
     let pillar = meshes.add(Cuboid::new(1.6, 4.0, 1.6));
     let pillar_mat = materials.add(StandardMaterial {
         base_color: Color::srgb(0.62, 0.38, 0.22),
         perceptual_roughness: 0.85,
         ..default()
     });
-    for (x, z) in [
-        (-6.0, -8.0),
-        (6.0, -8.0),
-        (-6.0, 8.0),
-        (6.0, 8.0),
-        (0.0, -12.0),
-    ] {
+    for (x, z) in [(-10.0, -10.0), (10.0, -10.0), (-10.0, 10.0), (10.0, 10.0)] {
         commands.spawn((
             Mesh3d(pillar.clone()),
             MeshMaterial3d(pillar_mat.clone()),
@@ -171,34 +202,107 @@ fn setup_scene(
     ));
 }
 
-#[derive(Component)]
-pub struct MainCamera;
-
 fn setup_hud(mut commands: Commands) {
+    commands
+        .spawn((
+            Node {
+                position_type: PositionType::Absolute,
+                top: Val::Px(12.0),
+                left: Val::Px(14.0),
+                width: Val::Px(380.0),
+                padding: UiRect::all(Val::Px(10.0)),
+                flex_direction: FlexDirection::Column,
+                row_gap: Val::Px(6.0),
+                ..default()
+            },
+            BackgroundColor(Color::srgba(0.04, 0.05, 0.06, 0.62)),
+        ))
+        .with_children(|root| {
+            root.spawn((
+                Text::new("UNBOUND"),
+                TextFont::from_font_size(15.0),
+                TextColor(Color::srgb(0.95, 0.95, 0.90)),
+                TextLayout::no_wrap(),
+                HudTitle,
+            ));
+            spawn_bar(
+                root,
+                Color::srgb(0.18, 0.07, 0.07),
+                Color::srgb(0.78, 0.20, 0.16),
+                HpFill,
+            );
+            spawn_bar(
+                root,
+                Color::srgb(0.16, 0.14, 0.05),
+                Color::srgb(0.82, 0.72, 0.22),
+                StamFill,
+            );
+            spawn_bar(
+                root,
+                Color::srgb(0.16, 0.06, 0.05),
+                Color::srgb(0.72, 0.22, 0.18),
+                DummyHpFill,
+            );
+            root.spawn((
+                Text::new(""),
+                TextFont::from_font_size(13.0),
+                TextColor(Color::srgb(0.90, 0.88, 0.80)),
+                TextLayout::no_wrap(),
+                HudLog,
+            ));
+        });
+
     commands.spawn((
-        Text::new("UNBOUND"),
-        TextFont::from_font_size(16.0),
-        TextColor(Color::srgb(0.95, 0.95, 0.90)),
-        TextLayout::no_wrap(),
         Node {
             position_type: PositionType::Absolute,
-            top: Val::Px(12.0),
-            left: Val::Px(14.0),
-            width: Val::Auto,
-            height: Val::Auto,
+            left: Val::Percent(50.0),
+            top: Val::Percent(50.0),
+            width: Val::Px(10.0),
+            height: Val::Px(10.0),
+            margin: UiRect {
+                left: Val::Px(-5.0),
+                top: Val::Px(-5.0),
+                ..default()
+            },
+            border: UiRect::all(Val::Px(1.5)),
             ..default()
         },
+        BorderColor::all(Color::srgba(0.95, 0.95, 0.9, 0.0)),
         BackgroundColor(Color::NONE),
-        HudText,
+        Crosshair,
     ));
+}
+
+fn spawn_bar(parent: &mut ChildSpawnerCommands, back: Color, fill: Color, marker: impl Bundle) {
+    parent
+        .spawn((
+            Node {
+                width: Val::Percent(100.0),
+                height: Val::Px(12.0),
+                ..default()
+            },
+            BackgroundColor(back),
+        ))
+        .with_children(|bar| {
+            bar.spawn((
+                Node {
+                    width: Val::Percent(100.0),
+                    height: Val::Percent(100.0),
+                    ..default()
+                },
+                BackgroundColor(fill),
+                marker,
+            ));
+        });
 }
 
 fn read_combat_input(
     keys: Res<ButtonInput<KeyCode>>,
     mouse: Res<ButtonInput<MouseButton>>,
     mut control: ResMut<ControlState>,
-    dummy: Query<&Transform, With<crate::combat::DummyPawn>>,
+    dummy: Query<&Transform, With<DummyPawn>>,
     local: Query<&Transform, With<LocalPlayer>>,
+    remotes: Query<&Transform, With<RemotePlayer>>,
 ) {
     if keys.just_pressed(KeyCode::KeyF) {
         control.drawn = !control.drawn;
@@ -236,10 +340,25 @@ fn read_combat_input(
     control.dir_z = dir_z;
 
     if control.lock_on {
-        if let (Ok(me), Ok(dummy)) = (local.single(), dummy.single()) {
-            let dx = dummy.translation.x - me.translation.x;
-            let dz = dummy.translation.z - me.translation.z;
-            control.yaw = (-dx).atan2(-dz);
+        if let Ok(me) = local.single() {
+            let mut best: Option<(f32, Vec3)> = None;
+            let consider = |best: &mut Option<(f32, Vec3)>, pos: Vec3| {
+                let d = me.translation.distance(pos);
+                if best.map(|(bd, _)| d < bd).unwrap_or(true) {
+                    *best = Some((d, pos));
+                }
+            };
+            if let Ok(dummy) = dummy.single() {
+                consider(&mut best, dummy.translation);
+            }
+            for remote in &remotes {
+                consider(&mut best, remote.translation);
+            }
+            if let Some((_, pos)) = best {
+                let dx = pos.x - me.translation.x;
+                let dz = pos.z - me.translation.z;
+                control.yaw = (-dx).atan2(-dz);
+            }
         }
     }
 
@@ -257,8 +376,9 @@ fn read_combat_input(
         if mouse.pressed(MouseButton::Middle) || keys.pressed(KeyCode::KeyQ) {
             buttons |= BTN_BLOCK;
         }
-    } else if mouse.pressed(MouseButton::Right) {
-        // sheathed RMB is look, not heavy
+    }
+    if keys.pressed(KeyCode::KeyE) {
+        buttons |= BTN_INTERACT;
     }
     if keys.pressed(KeyCode::ShiftLeft) || keys.pressed(KeyCode::ShiftRight) {
         buttons |= BTN_SPRINT;
@@ -269,11 +389,14 @@ fn read_combat_input(
 fn update_hud(
     control: Res<ControlState>,
     vitals: Res<LocalVitals>,
-    mut text: Query<&mut Text, With<HudText>>,
+    mut title: Query<&mut Text, With<HudTitle>>,
+    mut log: Query<&mut Text, (With<HudLog>, Without<HudTitle>)>,
+    mut bars: ParamSet<(
+        Query<&mut Node, With<HpFill>>,
+        Query<&mut Node, With<StamFill>>,
+        Query<&mut Node, With<DummyHpFill>>,
+    )>,
 ) {
-    let Ok(mut text) = text.single_mut() else {
-        return;
-    };
     let stance = if !vitals.alive {
         "DEAD"
     } else if control.drawn {
@@ -292,19 +415,66 @@ fn update_hud(
     } else {
         vitals.stamina
     };
-    text.0 = format!(
-        "UNBOUND  {stance}  {}  [{}]\nHP {hp:3.0}/{MAX_HP:.0}   ST {stam:3.0}/{MAX_STAMINA:.0}   lock {}\nMelee {}  Range {}  Magic {}  Def {}  HP-skill {}\nWASD move  F draw  LMB light  RMB heavy  Space dodge  Shift sprint\n1 sword  2 bow  3 staff  Tab lock dummy  Q/MMB block",
-        def.name,
-        if vitals.name.is_empty() {
-            "online"
+    let name = if vitals.name.is_empty() {
+        "online"
+    } else {
+        vitals.name.as_str()
+    };
+    if let Ok(mut text) = title.single_mut() {
+        text.0 = format!(
+            "UNBOUND  {stance}  {}  [{name}]  lock {}",
+            def.name,
+            if control.lock_on { "ON" } else { "off" },
+        );
+    }
+    if let Ok(mut fill) = bars.p0().single_mut() {
+        fill.width = Val::Percent((100.0 * (hp / MAX_HP)).clamp(0.0, 100.0));
+    }
+    if let Ok(mut fill) = bars.p1().single_mut() {
+        fill.width = Val::Percent((100.0 * (stam / MAX_STAMINA)).clamp(0.0, 100.0));
+    }
+    if let Ok(mut fill) = bars.p2().single_mut() {
+        fill.width = Val::Percent((100.0 * (vitals.dummy_hp / MAX_HP)).clamp(0.0, 100.0));
+    }
+    if let Ok(mut text) = log.single_mut() {
+        let gather_hint = if !control.drawn && vitals.node_dist <= GATHER_RANGE {
+            format!(
+                "E gather {} ({:.1}m)\n",
+                if vitals.node_kind == 1 { "ore" } else { "wood" },
+                vitals.node_dist
+            )
         } else {
-            vitals.name.as_str()
-        },
-        if control.lock_on { "ON" } else { "off" },
-        vitals.melee.max(1),
-        vitals.ranged.max(1),
-        vitals.magic.max(1),
-        vitals.defence.max(1),
-        vitals.hitpoints.max(1),
-    );
+            String::new()
+        };
+        let others = if vitals.others.is_empty() {
+            "no other wanderers".into()
+        } else {
+            vitals.others.clone()
+        };
+        text.0 = format!(
+            "HP {hp:3.0}   ST {stam:3.0}   Dummy {dummy:3.0}{dummy_state}\n\
+             Melee {melee}  Range {ranged}  Magic {magic}  Def {defence}  HP {hitpoints}  Gather {gather}\n\
+             {gather_hint}{others}\n\
+             {log}\n\
+             WASD  F draw  LMB/RMB  Space dodge  Shift sprint  E gather\n\
+             1 sword  2 bow  3 staff  Tab lock  Q/MMB block",
+            dummy = vitals.dummy_hp,
+            dummy_state = if vitals.dummy_alive { "" } else { "  (down)" },
+            melee = vitals.melee.max(1),
+            ranged = vitals.ranged.max(1),
+            magic = vitals.magic.max(1),
+            defence = vitals.defence.max(1),
+            hitpoints = vitals.hitpoints.max(1),
+            gather = vitals.gather.max(1),
+            log = vitals.log,
+        );
+    }
+}
+
+fn update_crosshair(control: Res<ControlState>, mut q: Query<&mut BorderColor, With<Crosshair>>) {
+    let Ok(mut border) = q.single_mut() else {
+        return;
+    };
+    let alpha = if control.drawn { 0.85 } else { 0.0 };
+    *border = BorderColor::all(Color::srgba(0.95, 0.95, 0.88, alpha));
 }

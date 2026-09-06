@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/shared", "crates/client"]
+members = ["crates/shared", "crates/client", "crates/bot"]
 exclude = ["crates/module"]
 
 [workspace.package]

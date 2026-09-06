@@ -66,7 +66,9 @@ pub fn update_camera(
     let looking = control.drawn || buttons.pressed(MouseButton::Right);
     if looking {
         for ev in motion.read() {
-            control.yaw -= ev.delta.x * LOOK_SENS;
+            if !control.lock_on {
+                control.yaw -= ev.delta.x * LOOK_SENS;
+            }
             control.pitch -= ev.delta.y * LOOK_SENS;
             control.pitch = control.pitch.clamp(-1.15, 0.45);
         }

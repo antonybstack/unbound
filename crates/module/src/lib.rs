@@ -2,12 +2,15 @@ use std::time::Duration;
 
 use spacetimedb::{table, Identity, ReducerContext, ScheduleAt, Table};
 use unbound_shared::{
-    action_busy, blocking, dist_xz, dodge_ticks, hitstun_ticks, integrate, invulnerable, loadout,
-    move_lock, scaled_damage, skill_for_loadout, skill_level, stamina_ok, swap_ticks, yaw_forward, ACTION_BLOCK,
-    ACTION_DEAD, ACTION_DODGE, ACTION_HEAVY, ACTION_HIT, ACTION_LIGHT, ACTION_NONE, ACTION_SWAP, BTN_BLOCK, BTN_DODGE,
-    BTN_HEAVY, BTN_LIGHT, BTN_SPRINT, DODGE_SPEED, HP_REGEN_PER_SEC, LOADOUT_SWORD, MAX_HP, MAX_STAMINA, MOVE_SPEED,
-    PLAYER_RADIUS, SKILL_DEFENCE, SKILL_HITPOINTS, SKILL_MAGIC, SKILL_MELEE, SKILL_RANGED, SPRINT_SPEED, STAMINA_REGEN_PER_SEC,
-    TICK_DT, WORLD_HALF,
+    action_busy, blocking, dist_xz, dodge_ticks, facing_dot, gather_ticks, hitstun_ticks,
+    integrate, invulnerable, knockback, loadout, move_lock, node_respawn_ticks, node_xp, push_apart,
+    scaled_damage, skill_for_loadout, skill_level, stamina_ok, swap_ticks, yaw_forward, ACTION_BLOCK,
+    ACTION_DEAD, ACTION_DODGE, ACTION_GATHER, ACTION_HEAVY, ACTION_HIT, ACTION_LIGHT, ACTION_NONE,
+    ACTION_SWAP, BODY_SEPARATION, BTN_BLOCK, BTN_DODGE, BTN_HEAVY, BTN_INTERACT, BTN_LIGHT, BTN_SPRINT,
+    DODGE_SPEED, GATHER_RANGE, HP_REGEN_PER_SEC, KNOCKBACK_HEAVY, KNOCKBACK_LIGHT, LOADOUT_SWORD,
+    MAX_HP, MAX_STAMINA, MOVE_SPEED, NODE_ORE, NODE_WOOD, PLAYER_RADIUS, SKILL_DEFENCE, SKILL_GATHERING,
+    SKILL_HITPOINTS, SKILL_MAGIC, SKILL_MELEE, SKILL_RANGED, SPRINT_SPEED, SPRINT_STAMINA_PER_SEC,
+    STAMINA_REGEN_PER_SEC, TICK_DT, WORLD_HALF,
 };
 
 #[table(accessor = player, public)]
@@ -54,6 +57,7 @@ pub struct Character {
     pub magic_xp: u64,
     pub defence_xp: u64,
     pub hitpoints_xp: u64,
+    pub gather_xp: u64,
 }
 
 #[table(accessor = dummy, public)]
@@ -90,6 +94,18 @@ pub struct Projectile {
     pub skill: u8,
 }
 
+#[table(accessor = gather_node, public)]
+#[derive(Clone, Debug)]
+pub struct GatherNode {
+    #[primary_key]
+    pub id: u32,
+    pub kind: u8,
+    pub x: f32,
+    pub z: f32,
+    pub charges: u8,
+    pub cooldown: u16,
+}
+
 #[table(accessor = combat_event, public, event)]
 #[derive(Clone, Debug)]
 pub struct CombatEvent {
@@ -117,7 +133,10 @@ const EVT_HIT: u8 = 1;
 const EVT_KILL: u8 = 2;
 const EVT_BLOCK: u8 = 3;
 const EVT_DODGE: u8 = 4;
+const EVT_GATHER: u8 = 5;
 const DUMMY_ID: u32 = 1;
+const DUMMY_HOME_X: f32 = 0.0;
+const DUMMY_HOME_Z: f32 = -10.0;
 
 #[spacetimedb::reducer(init)]
 pub fn init(ctx: &ReducerContext) -> Result<(), String> {
@@ -127,8 +146,8 @@ pub fn init(ctx: &ReducerContext) -> Result<(), String> {
     })?;
     ctx.db.dummy().try_insert(Dummy {
         id: DUMMY_ID,
-        x: 0.0,
-        z: -12.0,
+        x: DUMMY_HOME_X,
+        z: DUMMY_HOME_Z,
         yaw: 0.0,
         hp: MAX_HP,
         action: ACTION_NONE,
@@ -137,7 +156,29 @@ pub fn init(ctx: &ReducerContext) -> Result<(), String> {
         alive: true,
         cooldown: 20,
     })?;
-    log::info!("unbound module initialized (combat yard)");
+    spawn_node(ctx, 1, NODE_WOOD, -12.0, 2.0, 4)?;
+    spawn_node(ctx, 2, NODE_WOOD, 12.0, 2.0, 4)?;
+    spawn_node(ctx, 3, NODE_ORE, 0.0, 14.0, 3)?;
+    log::info!("unbound module initialized (combat yard + gather)");
+    Ok(())
+}
+
+fn spawn_node(
+    ctx: &ReducerContext,
+    id: u32,
+    kind: u8,
+    x: f32,
+    z: f32,
+    charges: u8,
+) -> Result<(), String> {
+    ctx.db.gather_node().try_insert(GatherNode {
+        id,
+        kind,
+        x,
+        z,
+        charges,
+        cooldown: 0,
+    })?;
     Ok(())
 }
 
@@ -166,7 +207,9 @@ pub fn set_name(ctx: &ReducerContext, name: String) -> Result<(), String> {
         c.name = name.clone();
         ctx.db.character().identity().update(c);
     } else {
-        ctx.db.character().insert(default_character(identity, name.clone()));
+        ctx.db
+            .character()
+            .insert(default_character(identity, name.clone()));
     }
     if let Some(mut p) = ctx.db.player().identity().find(&identity) {
         p.name = name;
@@ -243,7 +286,9 @@ pub fn world_tick(ctx: &ReducerContext, _tick: WorldTickTimer) -> Result<(), Str
 
     tick_players(ctx);
     tick_dummy(ctx);
+    separate_occupants(ctx);
     tick_projectiles(ctx);
+    tick_nodes(ctx);
     Ok(())
 }
 
@@ -282,13 +327,27 @@ fn tick_players(ctx: &ReducerContext) {
             };
         }
 
+        if player.action == ACTION_GATHER && player.action_ticks == 0 {
+            resolve_gather(ctx, &player);
+            player.action = ACTION_NONE;
+        }
+
+        if player.action == ACTION_GATHER {
+            if player.drawn || nearest_node_range(ctx, player.x, player.z) > GATHER_RANGE {
+                player.action = ACTION_NONE;
+                player.action_ticks = 0;
+            }
+        }
+
         if player.action_ticks == 0 && player.action != ACTION_BLOCK {
             player.action = ACTION_NONE;
         }
 
         if player.drawn && !action_busy(player.action) {
             try_start_player_action(ctx, &mut player, &input);
-        } else if !player.drawn {
+        } else if !player.drawn && !action_busy(player.action) {
+            try_start_gather(&mut player, &input, ctx);
+        } else if !player.drawn && player.action != ACTION_GATHER {
             player.action = ACTION_NONE;
             player.pending_hit = false;
         }
@@ -297,7 +356,17 @@ fn tick_players(ctx: &ReducerContext) {
             player.action = ACTION_NONE;
         }
 
-        let speed = move_speed(&player, &input);
+        let sprinting = (input.buttons & BTN_SPRINT) != 0
+            && player.stamina > 1.0
+            && !move_lock(player.action)
+            && player.action != ACTION_DODGE;
+        let speed = if player.action == ACTION_DODGE {
+            DODGE_SPEED
+        } else if sprinting {
+            SPRINT_SPEED
+        } else {
+            MOVE_SPEED
+        };
         if !move_lock(player.action) {
             let (x, z) = integrate(
                 player.x,
@@ -312,7 +381,9 @@ fn tick_players(ctx: &ReducerContext) {
             player.z = z;
         }
 
-        if player.action != ACTION_DODGE && player.action != ACTION_BLOCK {
+        if sprinting {
+            player.stamina = (player.stamina - SPRINT_STAMINA_PER_SEC * TICK_DT).max(0.0);
+        } else if player.action != ACTION_DODGE && player.action != ACTION_BLOCK {
             player.stamina = (player.stamina + STAMINA_REGEN_PER_SEC * TICK_DT).min(MAX_STAMINA);
         }
         if player.hp < MAX_HP {
@@ -382,12 +453,80 @@ fn try_start_player_action(ctx: &ReducerContext, player: &mut Player, input: &Pl
     let _ = ctx;
 }
 
+fn try_start_gather(player: &mut Player, input: &PlayerInput, ctx: &ReducerContext) {
+    if (input.buttons & BTN_INTERACT) == 0 {
+        return;
+    }
+    if nearest_node_range(ctx, player.x, player.z) > GATHER_RANGE {
+        return;
+    }
+    player.action = ACTION_GATHER;
+    player.action_ticks = gather_ticks();
+    player.pending_hit = false;
+}
+
+fn resolve_gather(ctx: &ReducerContext, player: &Player) {
+    let mut best: Option<(f32, GatherNode)> = None;
+    for node in ctx.db.gather_node().iter() {
+        if node.charges == 0 {
+            continue;
+        }
+        let d = dist_xz(player.x, player.z, node.x, node.z);
+        if d <= GATHER_RANGE && best.as_ref().map(|(bd, _)| d < *bd).unwrap_or(true) {
+            best = Some((d, node));
+        }
+    }
+    let Some((_, mut node)) = best else {
+        return;
+    };
+    node.charges = node.charges.saturating_sub(1);
+    if node.charges == 0 {
+        node.cooldown = node_respawn_ticks();
+    }
+    grant_xp(ctx, player.identity, SKILL_GATHERING, node_xp(node.kind));
+    emit(
+        ctx,
+        EVT_GATHER,
+        false,
+        player.identity,
+        0,
+        false,
+        player.identity,
+        node.id,
+        node_xp(node.kind) as f32,
+        node.x,
+        node.z,
+    );
+    ctx.db.gather_node().id().update(node);
+}
+
+fn nearest_node_range(ctx: &ReducerContext, x: f32, z: f32) -> f32 {
+    let mut best = f32::MAX;
+    for node in ctx.db.gather_node().iter() {
+        if node.charges == 0 {
+            continue;
+        }
+        let d = dist_xz(x, z, node.x, node.z);
+        if d < best {
+            best = d;
+        }
+    }
+    best
+}
+
 fn resolve_player_attack(ctx: &ReducerContext, player: &Player) {
     let def = loadout(player.loadout);
     let skill_id = skill_for_loadout(player.loadout);
     let level = character_skill(ctx, player.identity, skill_id);
     let heavy = player.action == ACTION_HEAVY;
-    let dmg = scaled_damage(if heavy { def.heavy_damage } else { def.light_damage }, level);
+    let dmg = scaled_damage(
+        if heavy {
+            def.heavy_damage
+        } else {
+            def.light_damage
+        },
+        level,
+    );
     if def.is_projectile {
         let (fx, fz) = yaw_forward(player.yaw);
         ctx.db.projectile().insert(Projectile {
@@ -416,6 +555,11 @@ fn resolve_player_attack(ctx: &ReducerContext, player: &Player) {
         player.identity,
         0,
         skill_id,
+        if heavy {
+            KNOCKBACK_HEAVY
+        } else {
+            KNOCKBACK_LIGHT
+        },
     );
 }
 
@@ -431,8 +575,8 @@ fn tick_dummy(ctx: &ReducerContext) {
             dummy.alive = true;
             dummy.action = ACTION_NONE;
             dummy.cooldown = 40;
-            dummy.x = 0.0;
-            dummy.z = -12.0;
+            dummy.x = DUMMY_HOME_X;
+            dummy.z = DUMMY_HOME_Z;
         }
         ctx.db.dummy().id().update(dummy);
         return;
@@ -452,6 +596,7 @@ fn tick_dummy(ctx: &ReducerContext) {
             Identity::from_byte_array([0; 32]),
             dummy.id,
             SKILL_MELEE,
+            KNOCKBACK_LIGHT,
         );
         dummy.pending_hit = false;
         dummy.action = ACTION_NONE;
@@ -461,7 +606,7 @@ fn tick_dummy(ctx: &ReducerContext) {
         dummy.cooldown -= 1;
     }
 
-    let mut nearest: Option<(f32, f32, f32, f32)> = None; // dist, x, z, yaw_to
+    let mut nearest: Option<(f32, f32, f32, f32)> = None;
     for p in ctx.db.player().iter() {
         if !p.alive {
             continue;
@@ -472,20 +617,83 @@ fn tick_dummy(ctx: &ReducerContext) {
             nearest = Some((d, p.x, p.z, yaw));
         }
     }
+    let home_d = dist_xz(dummy.x, dummy.z, DUMMY_HOME_X, DUMMY_HOME_Z);
     if let Some((d, _px, _pz, yaw)) = nearest {
         dummy.yaw = yaw;
-        if d > 1.8 && d < 18.0 && dummy.action_ticks == 0 {
+        let chase = d < 12.0 && home_d < 14.0;
+        if chase && d > 2.05 && dummy.action_ticks == 0 {
             let (x, z) = integrate(dummy.x, dummy.z, dummy.yaw, 0.0, 1.0, TICK_DT, 3.2);
             dummy.x = x;
             dummy.z = z;
+        } else if !chase && home_d > 0.6 && dummy.action_ticks == 0 {
+            let yaw_home = (-(DUMMY_HOME_X - dummy.x)).atan2(-(DUMMY_HOME_Z - dummy.z));
+            dummy.yaw = yaw_home;
+            let (x, z) = integrate(dummy.x, dummy.z, dummy.yaw, 0.0, 1.0, TICK_DT, 3.6);
+            dummy.x = x;
+            dummy.z = z;
         }
-        if d < 2.4 && dummy.cooldown == 0 && dummy.action_ticks == 0 {
+        if chase && d < 2.55 && dummy.cooldown == 0 && dummy.action_ticks == 0 {
             dummy.action = ACTION_LIGHT;
             dummy.action_ticks = 9;
             dummy.pending_hit = true;
         }
+    } else if home_d > 0.6 && dummy.action_ticks == 0 {
+        let yaw_home = (-(DUMMY_HOME_X - dummy.x)).atan2(-(DUMMY_HOME_Z - dummy.z));
+        dummy.yaw = yaw_home;
+        let (x, z) = integrate(dummy.x, dummy.z, dummy.yaw, 0.0, 1.0, TICK_DT, 3.6);
+        dummy.x = x;
+        dummy.z = z;
     }
     ctx.db.dummy().id().update(dummy);
+}
+
+fn separate_occupants(ctx: &ReducerContext) {
+    let mut players: Vec<Player> = ctx.db.player().iter().collect();
+    let n = players.len();
+    for i in 0..n {
+        for j in (i + 1)..n {
+            if !players[i].alive || !players[j].alive {
+                continue;
+            }
+            let (ax, az, bx, bz) = push_apart(
+                players[i].x,
+                players[i].z,
+                players[j].x,
+                players[j].z,
+                BODY_SEPARATION,
+            );
+            players[i].x = ax;
+            players[i].z = az;
+            players[j].x = bx;
+            players[j].z = bz;
+        }
+    }
+
+    if let Some(mut dummy) = ctx.db.dummy().id().find(&DUMMY_ID) {
+        if dummy.alive {
+            for p in players.iter_mut() {
+                if !p.alive {
+                    continue;
+                }
+                let (dx, dz, px, pz) = push_apart(
+                    dummy.x,
+                    dummy.z,
+                    p.x,
+                    p.z,
+                    BODY_SEPARATION + 0.15,
+                );
+                dummy.x = dx;
+                dummy.z = dz;
+                p.x = px;
+                p.z = pz;
+            }
+        }
+        ctx.db.dummy().id().update(dummy);
+    }
+
+    for p in players {
+        ctx.db.player().identity().update(p);
+    }
 }
 
 fn tick_projectiles(ctx: &ReducerContext) {
@@ -526,6 +734,9 @@ fn tick_projectiles(ctx: &ReducerContext) {
                         shot.owner,
                         shot.dummy_owner,
                         shot.skill,
+                        shot.x - shot.vx * TICK_DT,
+                        shot.z - shot.vz * TICK_DT,
+                        KNOCKBACK_LIGHT,
                     );
                     ctx.db.player().identity().update(victim);
                     consumed = true;
@@ -541,6 +752,19 @@ fn tick_projectiles(ctx: &ReducerContext) {
     }
 }
 
+fn tick_nodes(ctx: &ReducerContext) {
+    let nodes: Vec<GatherNode> = ctx.db.gather_node().iter().collect();
+    for mut node in nodes {
+        if node.charges == 0 && node.cooldown > 0 {
+            node.cooldown -= 1;
+            if node.cooldown == 0 {
+                node.charges = if node.kind == NODE_ORE { 3 } else { 4 };
+            }
+            ctx.db.gather_node().id().update(node);
+        }
+    }
+}
+
 fn melee_strike(
     ctx: &ReducerContext,
     x: f32,
@@ -552,21 +776,19 @@ fn melee_strike(
     attacker: Identity,
     dummy_id: u32,
     skill: u8,
+    kb: f32,
 ) {
-    let (fx, fz) = yaw_forward(yaw);
     if !from_dummy {
         if let Some(mut dummy) = ctx.db.dummy().id().find(&DUMMY_ID) {
             if dummy.alive {
                 let dx = dummy.x - x;
                 let dz = dummy.z - z;
                 let dist = (dx * dx + dz * dz).sqrt();
-                let toward = if dist > 0.001 {
-                    (dx / dist) * fx + (dz / dist) * fz
-                } else {
-                    1.0
-                };
-                if dist <= range + 0.4 && toward > 0.25 {
+                if dist <= range + 0.4 && facing_dot(yaw, dx, dz) > 0.25 {
                     apply_dummy_damage(ctx, &mut dummy, damage, attacker, skill);
+                    let (nx, nz) = knockback(dummy.x, dummy.z, x, z, kb * 0.6);
+                    dummy.x = nx;
+                    dummy.z = nz;
                     ctx.db.dummy().id().update(dummy);
                 }
             }
@@ -583,13 +805,10 @@ fn melee_strike(
         let dx = victim.x - x;
         let dz = victim.z - z;
         let dist = (dx * dx + dz * dz).sqrt();
-        let toward = if dist > 0.001 {
-            (dx / dist) * fx + (dz / dist) * fz
-        } else {
-            1.0
-        };
-        if dist <= range + PLAYER_RADIUS && toward > 0.2 {
-            apply_player_damage(ctx, &mut victim, damage, from_dummy, attacker, dummy_id, skill);
+        if dist <= range + PLAYER_RADIUS && facing_dot(yaw, dx, dz) > 0.2 {
+            apply_player_damage(
+                ctx, &mut victim, damage, from_dummy, attacker, dummy_id, skill, x, z, kb,
+            );
             ctx.db.player().identity().update(victim);
         }
     }
@@ -603,6 +822,9 @@ fn apply_player_damage(
     attacker: Identity,
     dummy_id: u32,
     skill: u8,
+    from_x: f32,
+    from_z: f32,
+    kb: f32,
 ) {
     if invulnerable(victim.action) {
         emit(
@@ -642,6 +864,9 @@ fn apply_player_damage(
     dealt *= 1.0 - 0.01 * def_lvl as f32;
     dealt = dealt.max(1.0);
     victim.hp -= dealt;
+    let (nx, nz) = knockback(victim.x, victim.z, from_x, from_z, kb);
+    victim.x = nx;
+    victim.z = nz;
     grant_xp(ctx, victim.identity, SKILL_DEFENCE, 4);
     grant_xp(ctx, victim.identity, SKILL_HITPOINTS, 2);
     if !from_dummy {
@@ -688,7 +913,13 @@ fn apply_player_damage(
     }
 }
 
-fn apply_dummy_damage(ctx: &ReducerContext, dummy: &mut Dummy, damage: f32, attacker: Identity, skill: u8) {
+fn apply_dummy_damage(
+    ctx: &ReducerContext,
+    dummy: &mut Dummy,
+    damage: f32,
+    attacker: Identity,
+    skill: u8,
+) {
     dummy.hp -= damage;
     grant_xp(ctx, attacker, skill, 6);
     grant_xp(ctx, attacker, SKILL_HITPOINTS, 2);
@@ -768,6 +999,7 @@ fn grant_xp(ctx: &ReducerContext, identity: Identity, skill: u8, amount: u64) {
         SKILL_MAGIC => c.magic_xp = c.magic_xp.saturating_add(amount),
         SKILL_DEFENCE => c.defence_xp = c.defence_xp.saturating_add(amount),
         SKILL_HITPOINTS => c.hitpoints_xp = c.hitpoints_xp.saturating_add(amount),
+        SKILL_GATHERING => c.gather_xp = c.gather_xp.saturating_add(amount),
         _ => c.melee_xp = c.melee_xp.saturating_add(amount),
     }
     ctx.db.character().identity().update(c);
@@ -782,6 +1014,7 @@ fn character_skill(ctx: &ReducerContext, identity: Identity, skill: u8) -> u8 {
         SKILL_MAGIC => c.magic_xp,
         SKILL_DEFENCE => c.defence_xp,
         SKILL_HITPOINTS => c.hitpoints_xp,
+        SKILL_GATHERING => c.gather_xp,
         _ => c.melee_xp,
     };
     skill_level(xp)
@@ -806,6 +1039,7 @@ fn default_character(identity: Identity, name: String) -> Character {
         magic_xp: 0,
         defence_xp: 0,
         hitpoints_xp: 0,
+        gather_xp: 0,
     }
 }
 
@@ -815,7 +1049,11 @@ fn default_name(identity: Identity) -> String {
 }
 
 fn sanitize_name(name: String) -> Result<String, String> {
-    let trimmed: String = name.chars().filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_').take(16).collect();
+    let trimmed: String = name
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_')
+        .take(16)
+        .collect();
     if trimmed.len() < 2 {
         return Err("name too short".into());
     }
@@ -826,16 +1064,6 @@ fn spawn_x(identity: Identity) -> f32 {
     let b = identity.to_byte_array();
     let n = i16::from_le_bytes([b[0], b[1]]) as f32 / 32768.0;
     (n * 6.0).clamp(-6.0, 6.0)
-}
-
-fn move_speed(player: &Player, input: &PlayerInput) -> f32 {
-    if player.action == ACTION_DODGE {
-        DODGE_SPEED
-    } else if (input.buttons & BTN_SPRINT) != 0 && player.stamina > 5.0 && !move_lock(player.action) {
-        SPRINT_SPEED
-    } else {
-        MOVE_SPEED
-    }
 }
 
 fn respawn_player(player: &mut Player) {

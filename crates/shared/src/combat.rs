@@ -1,6 +1,6 @@
 use crate::{
-    ACTION_BLOCK, ACTION_DODGE, ACTION_HEAVY, ACTION_HIT, ACTION_LIGHT, ACTION_SWAP, LOADOUT_BOW,
-    LOADOUT_STAFF, LOADOUT_SWORD, TICK_HZ,
+    ACTION_BLOCK, ACTION_DEAD, ACTION_DODGE, ACTION_GATHER, ACTION_HEAVY, ACTION_HIT, ACTION_LIGHT,
+    ACTION_SWAP, LOADOUT_BOW, LOADOUT_STAFF, LOADOUT_SWORD, TICK_HZ,
 };
 
 #[derive(Clone, Copy, Debug)]
@@ -96,6 +96,14 @@ pub fn death_respawn_ticks() -> u8 {
     (3.0 * TICK_HZ) as u8
 }
 
+pub fn gather_ticks() -> u8 {
+    (1.35 * TICK_HZ) as u8
+}
+
+pub fn node_respawn_ticks() -> u16 {
+    (8.0 * TICK_HZ) as u16
+}
+
 pub fn stamina_ok(stamina: f32, cost: f32) -> bool {
     stamina + 0.01 >= cost
 }
@@ -110,10 +118,15 @@ pub fn action_busy(action: u8) -> bool {
         || action == ACTION_DODGE
         || action == ACTION_SWAP
         || action == ACTION_HIT
+        || action == ACTION_GATHER
+        || action == ACTION_DEAD
 }
 
 pub fn move_lock(action: u8) -> bool {
-    action == ACTION_HEAVY || action == ACTION_SWAP
+    action == ACTION_HEAVY
+        || action == ACTION_SWAP
+        || action == ACTION_GATHER
+        || action == ACTION_DEAD
 }
 
 pub fn blocking(action: u8) -> bool {
