@@ -17,6 +17,27 @@ pub struct LocalPlayer;
 #[derive(Component)]
 pub struct RemotePlayer;
 
+#[derive(Component)]
+pub struct RemoteStep {
+    pub accum: f32,
+    pub last_x: f32,
+    pub last_z: f32,
+    pub speed: f32,
+    pub since: f32,
+}
+
+impl RemoteStep {
+    pub fn new(x: f32, z: f32) -> Self {
+        Self {
+            accum: 0.18,
+            last_x: x,
+            last_z: z,
+            speed: 0.0,
+            since: 0.0,
+        }
+    }
+}
+
 #[derive(Component, Clone, Copy)]
 pub struct NetworkedIdentity {
     pub identity: spacetimedb_sdk::Identity,
@@ -359,9 +380,11 @@ fn spawn_pawn(
     if is_local {
         commands.entity(parent).insert(LocalPlayer);
     } else {
-        commands
-            .entity(parent)
-            .insert((RemotePlayer, crate::camera::CamBlock::default()));
+        commands.entity(parent).insert((
+            RemotePlayer,
+            crate::camera::CamBlock::default(),
+            RemoteStep::new(player.x, player.z),
+        ));
         let bar = commands
             .spawn((
                 Mesh3d(meshes.add(Cuboid::new(1.0, 0.1, 0.04))),
