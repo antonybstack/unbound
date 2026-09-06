@@ -284,6 +284,7 @@ pub const CAM_BLOCK_RADIUS: f32 = 0.95;
 pub const LOCK_RANGE: f32 = 16.0;
 pub const LOCK_PULSE_TIME: f32 = 0.22;
 pub const LOCK_PULSE_EXTRA: f32 = 0.7;
+pub const LOCK_LOST_TIME: f32 = 0.18;
 pub const CROSSHAIR_KICK_TIME: f32 = 0.16;
 pub const CROSSHAIR_BORDER: f32 = 1.5;
 pub const CROSSHAIR_KICK_EXTRA: f32 = 1.6;
@@ -486,6 +487,12 @@ pub fn incoming_hit_shake(kind: u8, damage: f32, attacker_is_dummy: bool) -> f32
 pub fn lock_reticle_scale(t: f32) -> f32 {
     let a = (t / LOCK_PULSE_TIME).clamp(0.0, 1.0);
     1.0 + a * a * LOCK_PULSE_EXTRA
+}
+
+/// Ring scale after a lock drops. Full size at t=LOCK_LOST_TIME, hidden at 0.
+/// Linear so the drop reads as a shrink, not a pop-out.
+pub fn lock_reticle_lost_scale(t: f32) -> f32 {
+    (t / LOCK_LOST_TIME).clamp(0.0, 1.0)
 }
 
 /// 1 at bolt-leave, 0 at rest. Quadratic ease so the flash snaps then settles.

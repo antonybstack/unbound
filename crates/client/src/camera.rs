@@ -4,9 +4,9 @@ use bevy::window::{CursorGrabMode, CursorOptions};
 
 use crate::{LocalPlayer, MainCamera};
 use unbound_shared::{
-    camera_distance, camera_push_out, camera_shake_amp, lock_focus_xz, lock_reticle_scale,
-    ACTION_DEAD, ACTION_DODGE, ACTION_NONE, CAM_BLOCK_RADIUS, CAM_SHEATHED, CAM_SHOULDER,
-    MAX_STAMINA, PLAYER_HEIGHT,
+    camera_distance, camera_push_out, camera_shake_amp, lock_focus_xz, lock_reticle_lost_scale,
+    lock_reticle_scale, ACTION_DEAD, ACTION_DODGE, ACTION_NONE, CAM_BLOCK_RADIUS, CAM_SHEATHED,
+    CAM_SHOULDER, MAX_STAMINA, PLAYER_HEIGHT,
 };
 
 #[derive(Component, Clone, Copy)]
@@ -65,6 +65,8 @@ pub struct ControlState {
     pub sfx_rise: bool,
     pub sfx_level: bool,
     pub lock_pulse: f32,
+    pub lock_lost: f32,
+    pub lock_lost_at: Option<Vec3>,
     pub shot_kick: f32,
     pub pip_pulse: f32,
 }
@@ -108,6 +110,8 @@ impl Default for ControlState {
             sfx_rise: false,
             sfx_level: false,
             lock_pulse: 0.0,
+            lock_lost: 0.0,
+            lock_lost_at: None,
             shot_kick: 0.0,
             pip_pulse: 0.0,
         }
@@ -186,6 +190,10 @@ pub fn update_camera(
     control.cam_dist += (want - control.cam_dist) * blend;
     control.shake = (control.shake - dt).max(0.0);
     control.lock_pulse = (control.lock_pulse - dt).max(0.0);
+    control.lock_lost = (control.lock_lost - dt).max(0.0);
+    if control.lock_lost <= 0.0 {
+        control.lock_lost_at = None;
+    }
     control.shot_kick = (control.shot_kick - dt).max(0.0);
     control.pip_pulse = (control.pip_pulse - dt).max(0.0);
 
@@ -232,12 +240,21 @@ pub fn update_camera(
     camera.look_at(focus, Vec3::Y);
 
     if let Ok(mut ring) = reticle.single_mut() {
-        if let Some(target) = control.lock_focus {
+        let shrinking = control.lock_lost > 0.0;
+        let target = control
+            .lock_focus
+            .or(control.lock_lost_at.filter(|_| shrinking));
+        if let Some(target) = target {
             let spin = time.elapsed_secs() * 2.2;
             ring.translation = Vec3::new(target.x, target.y + 1.15, target.z);
             ring.rotation =
                 Quat::from_rotation_x(std::f32::consts::FRAC_PI_2) * Quat::from_rotation_z(spin);
-            ring.scale = Vec3::splat(lock_reticle_scale(control.lock_pulse));
+            let scale = if control.lock_focus.is_some() {
+                lock_reticle_scale(control.lock_pulse)
+            } else {
+                lock_reticle_lost_scale(control.lock_lost)
+            };
+            ring.scale = Vec3::splat(scale);
         } else {
             ring.scale = Vec3::ZERO;
         }

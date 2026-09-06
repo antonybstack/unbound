@@ -693,6 +693,22 @@ mod tests {
     }
 
     #[test]
+    fn lock_reticle_shrinks_when_tab_drops() {
+        assert!(LOCK_LOST_TIME >= 0.14 && LOCK_LOST_TIME <= 0.22);
+        assert!((lock_reticle_lost_scale(0.0) - 0.0).abs() < 1e-4);
+        assert!((lock_reticle_lost_scale(LOCK_LOST_TIME) - 1.0).abs() < 1e-4);
+        let mid = lock_reticle_lost_scale(LOCK_LOST_TIME * 0.5);
+        assert!((mid - 0.5).abs() < 1e-4);
+        assert!(mid > 0.0 && mid < 1.0);
+        assert!(lock_reticle_lost_scale(LOCK_LOST_TIME * 0.25) < mid);
+        assert!((lock_reticle_lost_scale(-0.5) - 0.0).abs() < 1e-4);
+        assert!((lock_reticle_lost_scale(LOCK_LOST_TIME * 2.0) - 1.0).abs() < 1e-4);
+        let grab = lock_reticle_scale(0.0);
+        assert!(lock_reticle_lost_scale(LOCK_LOST_TIME) <= grab);
+        assert!(lock_reticle_lost_scale(0.0) < grab);
+    }
+
+    #[test]
     fn crosshair_kicks_when_a_bolt_leaves() {
         assert!(CROSSHAIR_KICK_TIME >= 0.12 && CROSSHAIR_KICK_TIME <= 0.18);
         let rest = crosshair_border_px(0.0);

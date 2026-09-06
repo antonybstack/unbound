@@ -569,6 +569,7 @@ fn read_combat_input(
     remotes: Query<(&Transform, &ServerPose), With<RemotePlayer>>,
 ) {
     let was_lock = control.lock_on;
+    let was_focus = control.lock_focus;
     if keys.just_pressed(KeyCode::KeyF) {
         control.drawn = !control.drawn;
         control.sfx_draw = if control.drawn { 1 } else { -1 };
@@ -658,11 +659,15 @@ fn read_combat_input(
     }
     if control.lock_on != was_lock {
         control.sfx_lock = if control.lock_on { 1 } else { -1 };
-        control.lock_pulse = if control.lock_on {
-            unbound_shared::LOCK_PULSE_TIME
+        if control.lock_on {
+            control.lock_pulse = unbound_shared::LOCK_PULSE_TIME;
+            control.lock_lost = 0.0;
+            control.lock_lost_at = None;
         } else {
-            0.0
-        };
+            control.lock_pulse = 0.0;
+            control.lock_lost = unbound_shared::LOCK_LOST_TIME;
+            control.lock_lost_at = was_focus;
+        }
     }
 
     let mut buttons = 0u32;
