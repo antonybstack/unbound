@@ -1,12 +1,13 @@
 use bevy::prelude::*;
 use bevy_stdb::prelude::*;
-use unbound_shared::{INPUT_SEND_HZ, PLAYER_HEIGHT, RECONCILE_SNAP, integrate};
+use unbound_shared::{
+    BTN_SPRINT, DODGE_SPEED, INPUT_SEND_HZ, MOVE_SPEED, PLAYER_HEIGHT, RECONCILE_SNAP,
+    SPRINT_SPEED, integrate,
+};
 
 use crate::camera::ControlState;
-use crate::module_bindings::{
-    Player, PlayerTableAccess, player_table::playerQueryTableAccess, set_input_reducer::set_input,
-};
-use crate::{StdbCmds, StdbConn, StdbSubs, SubKey};
+use crate::module_bindings::{Player, PlayerTableAccess, set_input_reducer::set_input};
+use crate::{StdbCmds, StdbConn};
 use spacetimedb_sdk::Table;
 
 #[derive(Component)]
@@ -30,12 +31,6 @@ pub struct ServerPose {
 
 pub fn connect(mut cmds: StdbCmds) {
     cmds.connect(StdbConnectOptions::default());
-}
-
-pub fn subscribe_on_connect(mut connected: ReadStdbConnectedMessage, mut subs: ResMut<StdbSubs>) {
-    if connected.read().next().is_some() {
-        subs.subscribe_query(SubKey::Players, |q| q.from.player());
-    }
 }
 
 pub fn spawn_pawns_from_cache(
@@ -148,6 +143,13 @@ pub fn predict_local(
     let Ok(mut transform) = local.single_mut() else {
         return;
     };
+    let speed = if (control.buttons & unbound_shared::BTN_DODGE) != 0 {
+        DODGE_SPEED
+    } else if (control.buttons & BTN_SPRINT) != 0 {
+        SPRINT_SPEED
+    } else {
+        MOVE_SPEED
+    };
     let (x, z) = integrate(
         transform.translation.x,
         transform.translation.z,
@@ -155,6 +157,7 @@ pub fn predict_local(
         control.dir_x,
         control.dir_z,
         time.delta_secs(),
+        speed,
     );
     transform.translation.x = x;
     transform.translation.z = z;
@@ -172,10 +175,14 @@ pub fn send_input(time: Res<Time>, mut control: ResMut<ControlState>, conn: Opti
         return;
     }
     control.send_accum = 0.0;
-    if let Err(err) =
-        conn.reducers()
-            .set_input(control.dir_x, control.dir_z, control.yaw, control.drawn)
-    {
+    if let Err(err) = conn.reducers().set_input(
+        control.dir_x,
+        control.dir_z,
+        control.yaw,
+        control.drawn,
+        control.buttons,
+        control.loadout,
+    ) {
         warn!("set_input failed: {err}");
     }
 }

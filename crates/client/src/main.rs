@@ -1,16 +1,27 @@
 mod camera;
+mod combat;
 mod module_bindings;
 mod net;
 
 use bevy::prelude::*;
 use bevy_stdb::prelude::*;
-use unbound_shared::PLAYER_HEIGHT;
+use unbound_shared::{
+    BTN_BLOCK, BTN_DODGE, BTN_HEAVY, BTN_LIGHT, BTN_SPRINT, MAX_HP, MAX_STAMINA, PLAYER_HEIGHT,
+    loadout,
+};
 
 use crate::camera::{ControlState, update_camera, update_cursor};
-use crate::module_bindings::{DbConnection, PlayerTableAccessor, RemoteModule};
+use crate::combat::{
+    LocalVitals, WeaponState, flash_hits, refresh_weapon, subscribe_world, sync_dummy,
+    sync_projectiles, sync_vitals,
+};
+use crate::module_bindings::{
+    CharacterTableAccessor, CombatEventTableAccessor, DbConnection, DummyTableAccessor,
+    PlayerTableAccessor, ProjectileTableAccessor, RemoteModule,
+};
 use crate::net::{
     LocalPlayer, apply_player_deletes, apply_player_inserts, apply_player_updates, connect,
-    interpolate_remotes, predict_local, send_input, spawn_pawns_from_cache, subscribe_on_connect,
+    interpolate_remotes, predict_local, send_input, spawn_pawns_from_cache,
 };
 
 pub type StdbConn = StdbConnection<DbConnection>;
@@ -20,6 +31,10 @@ pub type StdbCmds<'w, 's> = StdbCommands<'w, 's, DbConnection, RemoteModule>;
 #[derive(Clone, Copy, Eq, PartialEq, Hash, Debug)]
 pub enum SubKey {
     Players,
+    Dummies,
+    Projectiles,
+    Characters,
+    Events,
 }
 
 fn main() {
@@ -30,6 +45,10 @@ fn main() {
         .with_database_name("unbound")
         .with_uri(stdb_uri())
         .add_table::<PlayerTableAccessor>()
+        .add_table::<DummyTableAccessor>()
+        .add_table::<ProjectileTableAccessor>()
+        .add_table::<CharacterTableAccessor>()
+        .add_event_table::<CombatEventTableAccessor>()
         .with_subscriptions::<SubKey>()
         .with_reconnect(StdbReconnectOptions::default());
 
@@ -58,19 +77,26 @@ fn main() {
         })
         .add_plugins(stdb)
         .insert_resource(ControlState::default())
+        .insert_resource(LocalVitals::default())
+        .insert_resource(WeaponState::default())
         .add_systems(Startup, (setup_scene, connect, setup_hud))
         .add_systems(
             Update,
             (
-                subscribe_on_connect,
+                subscribe_world,
                 spawn_pawns_from_cache,
                 apply_player_inserts,
                 apply_player_updates,
                 apply_player_deletes,
                 interpolate_remotes,
-                read_movement_keys,
+                sync_dummy,
+                sync_projectiles,
+                sync_vitals,
+                flash_hits,
+                read_combat_input,
                 predict_local,
                 send_input,
+                refresh_weapon,
                 update_cursor,
                 update_camera,
                 update_hud,
@@ -150,7 +176,7 @@ pub struct MainCamera;
 
 fn setup_hud(mut commands: Commands) {
     commands.spawn((
-        Text::new(hud_copy(false, false)),
+        Text::new("UNBOUND"),
         TextFont::from_font_size(16.0),
         TextColor(Color::srgb(0.95, 0.95, 0.90)),
         TextLayout::no_wrap(),
@@ -167,9 +193,30 @@ fn setup_hud(mut commands: Commands) {
     ));
 }
 
-fn read_movement_keys(keys: Res<ButtonInput<KeyCode>>, mut control: ResMut<ControlState>) {
+fn read_combat_input(
+    keys: Res<ButtonInput<KeyCode>>,
+    mouse: Res<ButtonInput<MouseButton>>,
+    mut control: ResMut<ControlState>,
+    dummy: Query<&Transform, With<crate::combat::DummyPawn>>,
+    local: Query<&Transform, With<LocalPlayer>>,
+) {
     if keys.just_pressed(KeyCode::KeyF) {
         control.drawn = !control.drawn;
+    }
+    if keys.just_pressed(KeyCode::Digit1) {
+        control.loadout = 0;
+        control.drawn = true;
+    }
+    if keys.just_pressed(KeyCode::Digit2) {
+        control.loadout = 1;
+        control.drawn = true;
+    }
+    if keys.just_pressed(KeyCode::Digit3) {
+        control.loadout = 2;
+        control.drawn = true;
+    }
+    if keys.just_pressed(KeyCode::Tab) {
+        control.lock_on = !control.lock_on;
     }
     let mut dir_x = 0.0;
     let mut dir_z = 0.0;
@@ -187,23 +234,77 @@ fn read_movement_keys(keys: Res<ButtonInput<KeyCode>>, mut control: ResMut<Contr
     }
     control.dir_x = dir_x;
     control.dir_z = dir_z;
+
+    if control.lock_on {
+        if let (Ok(me), Ok(dummy)) = (local.single(), dummy.single()) {
+            let dx = dummy.translation.x - me.translation.x;
+            let dz = dummy.translation.z - me.translation.z;
+            control.yaw = (-dx).atan2(-dz);
+        }
+    }
+
+    let mut buttons = 0u32;
+    if control.drawn {
+        if mouse.pressed(MouseButton::Left) {
+            buttons |= BTN_LIGHT;
+        }
+        if mouse.pressed(MouseButton::Right) {
+            buttons |= BTN_HEAVY;
+        }
+        if keys.pressed(KeyCode::Space) {
+            buttons |= BTN_DODGE;
+        }
+        if mouse.pressed(MouseButton::Middle) || keys.pressed(KeyCode::KeyQ) {
+            buttons |= BTN_BLOCK;
+        }
+    } else if mouse.pressed(MouseButton::Right) {
+        // sheathed RMB is look, not heavy
+    }
+    if keys.pressed(KeyCode::ShiftLeft) || keys.pressed(KeyCode::ShiftRight) {
+        buttons |= BTN_SPRINT;
+    }
+    control.buttons = buttons;
 }
 
 fn update_hud(
     control: Res<ControlState>,
-    local: Query<(), With<LocalPlayer>>,
+    vitals: Res<LocalVitals>,
     mut text: Query<&mut Text, With<HudText>>,
 ) {
     let Ok(mut text) = text.single_mut() else {
         return;
     };
-    text.0 = hud_copy(control.drawn, !local.is_empty());
-}
-
-fn hud_copy(drawn: bool, connected: bool) -> String {
-    let stance = if drawn { "DRAWN" } else { "SHEATHED" };
-    let net = if connected { "online" } else { "connecting…" };
-    format!(
-        "UNBOUND  {stance}  [{net}]\nWASD move   RMB look (sheathed)   F draw/sheathe   Esc cursor"
-    )
+    let stance = if !vitals.alive {
+        "DEAD"
+    } else if control.drawn {
+        "DRAWN"
+    } else {
+        "SHEATHED"
+    };
+    let def = loadout(control.loadout);
+    let hp = if vitals.hp == 0.0 && vitals.name.is_empty() {
+        MAX_HP
+    } else {
+        vitals.hp
+    };
+    let stam = if vitals.stamina == 0.0 && vitals.name.is_empty() {
+        MAX_STAMINA
+    } else {
+        vitals.stamina
+    };
+    text.0 = format!(
+        "UNBOUND  {stance}  {}  [{}]\nHP {hp:3.0}/{MAX_HP:.0}   ST {stam:3.0}/{MAX_STAMINA:.0}   lock {}\nMelee {}  Range {}  Magic {}  Def {}  HP-skill {}\nWASD move  F draw  LMB light  RMB heavy  Space dodge  Shift sprint\n1 sword  2 bow  3 staff  Tab lock dummy  Q/MMB block",
+        def.name,
+        if vitals.name.is_empty() {
+            "online"
+        } else {
+            vitals.name.as_str()
+        },
+        if control.lock_on { "ON" } else { "off" },
+        vitals.melee.max(1),
+        vitals.ranged.max(1),
+        vitals.magic.max(1),
+        vitals.defence.max(1),
+        vitals.hitpoints.max(1),
+    );
 }

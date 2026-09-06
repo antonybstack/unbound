@@ -16,6 +16,9 @@ pub struct ControlState {
     pub dir_x: f32,
     pub dir_z: f32,
     pub send_accum: f32,
+    pub buttons: u32,
+    pub loadout: u8,
+    pub lock_on: bool,
 }
 
 impl Default for ControlState {
@@ -27,6 +30,9 @@ impl Default for ControlState {
             dir_x: 0.0,
             dir_z: 0.0,
             send_accum: 0.0,
+            buttons: 0,
+            loadout: 0,
+            lock_on: false,
         }
     }
 }

@@ -13,6 +13,14 @@ pub struct Player {
     pub z: f32,
     pub yaw: f32,
     pub drawn: bool,
+    pub hp: f32,
+    pub stamina: f32,
+    pub loadout: u8,
+    pub action: u8,
+    pub action_ticks: u8,
+    pub pending_hit: bool,
+    pub alive: bool,
+    pub name: String,
 }
 
 impl __sdk::InModule for Player {
@@ -29,6 +37,14 @@ pub struct PlayerCols {
     pub z: __sdk::__query_builder::Col<Player, f32>,
     pub yaw: __sdk::__query_builder::Col<Player, f32>,
     pub drawn: __sdk::__query_builder::Col<Player, bool>,
+    pub hp: __sdk::__query_builder::Col<Player, f32>,
+    pub stamina: __sdk::__query_builder::Col<Player, f32>,
+    pub loadout: __sdk::__query_builder::Col<Player, u8>,
+    pub action: __sdk::__query_builder::Col<Player, u8>,
+    pub action_ticks: __sdk::__query_builder::Col<Player, u8>,
+    pub pending_hit: __sdk::__query_builder::Col<Player, bool>,
+    pub alive: __sdk::__query_builder::Col<Player, bool>,
+    pub name: __sdk::__query_builder::Col<Player, String>,
 }
 
 impl __sdk::__query_builder::HasCols for Player {
@@ -41,6 +57,14 @@ impl __sdk::__query_builder::HasCols for Player {
             z: __sdk::__query_builder::Col::new(table_name, "z"),
             yaw: __sdk::__query_builder::Col::new(table_name, "yaw"),
             drawn: __sdk::__query_builder::Col::new(table_name, "drawn"),
+            hp: __sdk::__query_builder::Col::new(table_name, "hp"),
+            stamina: __sdk::__query_builder::Col::new(table_name, "stamina"),
+            loadout: __sdk::__query_builder::Col::new(table_name, "loadout"),
+            action: __sdk::__query_builder::Col::new(table_name, "action"),
+            action_ticks: __sdk::__query_builder::Col::new(table_name, "action_ticks"),
+            pending_hit: __sdk::__query_builder::Col::new(table_name, "pending_hit"),
+            alive: __sdk::__query_builder::Col::new(table_name, "alive"),
+            name: __sdk::__query_builder::Col::new(table_name, "name"),
         }
     }
 }

@@ -11,6 +11,8 @@ pub(super) struct SetInputArgs {
     pub dir_z: f32,
     pub yaw: f32,
     pub drawn: bool,
+    pub buttons: u32,
+    pub loadout: u8,
 }
 
 impl From<SetInputArgs> for super::Reducer {
@@ -20,6 +22,8 @@ impl From<SetInputArgs> for super::Reducer {
             dir_z: args.dir_z,
             yaw: args.yaw,
             drawn: args.drawn,
+            buttons: args.buttons,
+            loadout: args.loadout,
         }
     }
 }
@@ -39,8 +43,16 @@ pub trait set_input {
     /// The reducer will run asynchronously in the future,
     ///  and this method provides no way to listen for its completion status.
     /// /// Use [`set_input:set_input_then`] to run a callback after the reducer completes.
-    fn set_input(&self, dir_x: f32, dir_z: f32, yaw: f32, drawn: bool) -> __sdk::Result<()> {
-        self.set_input_then(dir_x, dir_z, yaw, drawn, |_, _| {})
+    fn set_input(
+        &self,
+        dir_x: f32,
+        dir_z: f32,
+        yaw: f32,
+        drawn: bool,
+        buttons: u32,
+        loadout: u8,
+    ) -> __sdk::Result<()> {
+        self.set_input_then(dir_x, dir_z, yaw, drawn, buttons, loadout, |_, _| {})
     }
 
     /// Request that the remote module invoke the reducer `set_input` to run as soon as possible,
@@ -55,6 +67,8 @@ pub trait set_input {
         dir_z: f32,
         yaw: f32,
         drawn: bool,
+        buttons: u32,
+        loadout: u8,
 
         callback: impl FnOnce(
             &super::ReducerEventContext,
@@ -71,6 +85,8 @@ impl set_input for super::RemoteReducers {
         dir_z: f32,
         yaw: f32,
         drawn: bool,
+        buttons: u32,
+        loadout: u8,
 
         callback: impl FnOnce(
             &super::ReducerEventContext,
@@ -84,6 +100,8 @@ impl set_input for super::RemoteReducers {
                 dir_z,
                 yaw,
                 drawn,
+                buttons,
+                loadout,
             },
             callback,
         )

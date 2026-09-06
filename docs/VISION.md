@@ -126,10 +126,10 @@ An MMO is a studio. A yard that feels right is a side project.
 
 | Slice | Status | Bar |
 |---|---|---|
-| **0 — locomotion** | In progress | Sheathe/draw camera, predicted WASD, 30 Hz module, native + browser against one local host. If running around is not addictive, stop and fix it. |
-| **1 — three loadouts** | Next | Sword+shield, bow, staff. Inventory swap is the spec. Stamina, light/heavy, one projectile, one block. A dummy with a readable swing. |
-| **2 — 1v1 PvP** | Later | Two clients, fake 60–80 ms latency, gear swap mid-fight. This is the WoW-PvP bar. |
-| **3 — a character that persists** | Later | Name, skills go up when used, inventory survives logout. One room with a gather node. “MMO” in the RuneScape sense without being one operationally. |
+| **0 — locomotion** | Playable | Sheathe/draw camera, predicted WASD, 30 Hz module, native + browser against one local host. |
+| **1 — three loadouts** | Playable | Sword, bow, staff (`1/2/3`). Stamina, light/heavy, dodge, block, dummy with a readable swing. |
+| **2 — 1v1 PvP** | Playable | Same combat rules on every player capsule. Two clients share the yard. |
+| **3 — a character that persists** | Playable | `character` row keeps XP/name across disconnect. Skills go up when you land hits. |
 
 **Not v1:** auction house, quest hubs, raids, OAuth, world streaming, navmesh armies, a character creator deep enough to ship a trailer.
 

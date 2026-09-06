@@ -6,16 +6,34 @@
 #![allow(unused, clippy::all)]
 use spacetimedb_sdk::__codegen::{self as __sdk, __lib, __sats, __ws};
 
+pub mod character_table;
+pub mod character_type;
+pub mod combat_event_table;
+pub mod combat_event_type;
+pub mod dummy_table;
+pub mod dummy_type;
 pub mod player_input_type;
 pub mod player_table;
 pub mod player_type;
+pub mod projectile_table;
+pub mod projectile_type;
 pub mod set_input_reducer;
+pub mod set_name_reducer;
 pub mod world_tick_timer_type;
 
+pub use character_table::*;
+pub use character_type::Character;
+pub use combat_event_table::*;
+pub use combat_event_type::CombatEvent;
+pub use dummy_table::*;
+pub use dummy_type::Dummy;
 pub use player_input_type::PlayerInput;
 pub use player_table::*;
 pub use player_type::Player;
+pub use projectile_table::*;
+pub use projectile_type::Projectile;
 pub use set_input_reducer::set_input;
+pub use set_name_reducer::set_name;
 pub use world_tick_timer_type::WorldTickTimer;
 
 #[derive(Clone, PartialEq, Debug)]
@@ -31,6 +49,11 @@ pub enum Reducer {
         dir_z: f32,
         yaw: f32,
         drawn: bool,
+        buttons: u32,
+        loadout: u8,
+    },
+    SetName {
+        name: String,
     },
 }
 
@@ -42,6 +65,7 @@ impl __sdk::Reducer for Reducer {
     fn reducer_name(&self) -> &'static str {
         match self {
             Reducer::SetInput { .. } => "set_input",
+            Reducer::SetName { .. } => "set_name",
             _ => unreachable!(),
         }
     }
@@ -53,12 +77,19 @@ impl __sdk::Reducer for Reducer {
                 dir_z,
                 yaw,
                 drawn,
+                buttons,
+                loadout,
             } => __sats::bsatn::to_vec(&set_input_reducer::SetInputArgs {
                 dir_x: dir_x.clone(),
                 dir_z: dir_z.clone(),
                 yaw: yaw.clone(),
                 drawn: drawn.clone(),
+                buttons: buttons.clone(),
+                loadout: loadout.clone(),
             }),
+            Reducer::SetName { name } => {
+                __sats::bsatn::to_vec(&set_name_reducer::SetNameArgs { name: name.clone() })
+            }
             _ => unreachable!(),
         }
     }
@@ -68,7 +99,11 @@ impl __sdk::Reducer for Reducer {
 #[allow(non_snake_case)]
 #[doc(hidden)]
 pub struct DbUpdate {
+    character: __sdk::TableUpdate<Character>,
+    combat_event: __sdk::TableUpdate<CombatEvent>,
+    dummy: __sdk::TableUpdate<Dummy>,
     player: __sdk::TableUpdate<Player>,
+    projectile: __sdk::TableUpdate<Projectile>,
 }
 
 impl TryFrom<__ws::v2::TransactionUpdate> for DbUpdate {
@@ -77,9 +112,21 @@ impl TryFrom<__ws::v2::TransactionUpdate> for DbUpdate {
         let mut db_update = DbUpdate::default();
         for table_update in __sdk::transaction_update_iter_table_updates(raw) {
             match &table_update.table_name[..] {
+                "character" => db_update
+                    .character
+                    .append(character_table::parse_table_update(table_update)?),
+                "combat_event" => db_update
+                    .combat_event
+                    .append(combat_event_table::parse_table_update(table_update)?),
+                "dummy" => db_update
+                    .dummy
+                    .append(dummy_table::parse_table_update(table_update)?),
                 "player" => db_update
                     .player
                     .append(player_table::parse_table_update(table_update)?),
+                "projectile" => db_update
+                    .projectile
+                    .append(projectile_table::parse_table_update(table_update)?),
 
                 unknown => {
                     return Err(__sdk::InternalError::unknown_name(
@@ -106,9 +153,19 @@ impl __sdk::DbUpdate for DbUpdate {
     ) -> AppliedDiff<'_> {
         let mut diff = AppliedDiff::default();
 
+        diff.character = cache
+            .apply_diff_to_table::<Character>("character", &self.character)
+            .with_updates_by_pk(|row| &row.identity);
+        diff.combat_event = self.combat_event.into_event_diff();
+        diff.dummy = cache
+            .apply_diff_to_table::<Dummy>("dummy", &self.dummy)
+            .with_updates_by_pk(|row| &row.id);
         diff.player = cache
             .apply_diff_to_table::<Player>("player", &self.player)
             .with_updates_by_pk(|row| &row.identity);
+        diff.projectile = cache
+            .apply_diff_to_table::<Projectile>("projectile", &self.projectile)
+            .with_updates_by_pk(|row| &row.id);
 
         diff
     }
@@ -116,8 +173,20 @@ impl __sdk::DbUpdate for DbUpdate {
         let mut db_update = DbUpdate::default();
         for table_rows in raw.tables {
             match &table_rows.table[..] {
+                "character" => db_update
+                    .character
+                    .append(__sdk::parse_row_list_as_inserts(table_rows.rows)?),
+                "combat_event" => db_update
+                    .combat_event
+                    .append(__sdk::parse_row_list_as_inserts(table_rows.rows)?),
+                "dummy" => db_update
+                    .dummy
+                    .append(__sdk::parse_row_list_as_inserts(table_rows.rows)?),
                 "player" => db_update
                     .player
+                    .append(__sdk::parse_row_list_as_inserts(table_rows.rows)?),
+                "projectile" => db_update
+                    .projectile
                     .append(__sdk::parse_row_list_as_inserts(table_rows.rows)?),
                 unknown => {
                     return Err(
@@ -132,8 +201,20 @@ impl __sdk::DbUpdate for DbUpdate {
         let mut db_update = DbUpdate::default();
         for table_rows in raw.tables {
             match &table_rows.table[..] {
+                "character" => db_update
+                    .character
+                    .append(__sdk::parse_row_list_as_deletes(table_rows.rows)?),
+                "combat_event" => db_update
+                    .combat_event
+                    .append(__sdk::parse_row_list_as_deletes(table_rows.rows)?),
+                "dummy" => db_update
+                    .dummy
+                    .append(__sdk::parse_row_list_as_deletes(table_rows.rows)?),
                 "player" => db_update
                     .player
+                    .append(__sdk::parse_row_list_as_deletes(table_rows.rows)?),
+                "projectile" => db_update
+                    .projectile
                     .append(__sdk::parse_row_list_as_deletes(table_rows.rows)?),
                 unknown => {
                     return Err(
@@ -150,7 +231,11 @@ impl __sdk::DbUpdate for DbUpdate {
 #[allow(non_snake_case)]
 #[doc(hidden)]
 pub struct AppliedDiff<'r> {
+    character: __sdk::TableAppliedDiff<'r, Character>,
+    combat_event: __sdk::TableAppliedDiff<'r, CombatEvent>,
+    dummy: __sdk::TableAppliedDiff<'r, Dummy>,
     player: __sdk::TableAppliedDiff<'r, Player>,
+    projectile: __sdk::TableAppliedDiff<'r, Projectile>,
     __unused: std::marker::PhantomData<&'r ()>,
 }
 
@@ -164,7 +249,15 @@ impl<'r> __sdk::AppliedDiff<'r> for AppliedDiff<'r> {
         event: &EventContext,
         callbacks: &mut __sdk::DbCallbacks<RemoteModule>,
     ) {
+        callbacks.invoke_table_row_callbacks::<Character>("character", &self.character, event);
+        callbacks.invoke_table_row_callbacks::<CombatEvent>(
+            "combat_event",
+            &self.combat_event,
+            event,
+        );
+        callbacks.invoke_table_row_callbacks::<Dummy>("dummy", &self.dummy, event);
         callbacks.invoke_table_row_callbacks::<Player>("player", &self.player, event);
+        callbacks.invoke_table_row_callbacks::<Projectile>("projectile", &self.projectile, event);
     }
 }
 
@@ -825,7 +918,12 @@ impl __sdk::SpacetimeModule for RemoteModule {
     type QueryBuilder = __sdk::QueryBuilder;
 
     fn register_tables(client_cache: &mut __sdk::ClientCache<Self>) {
+        character_table::register_table(client_cache);
+        combat_event_table::register_table(client_cache);
+        dummy_table::register_table(client_cache);
         player_table::register_table(client_cache);
+        projectile_table::register_table(client_cache);
     }
-    const ALL_TABLE_NAMES: &'static [&'static str] = &["player"];
+    const ALL_TABLE_NAMES: &'static [&'static str] =
+        &["character", "combat_event", "dummy", "player", "projectile"];
 }

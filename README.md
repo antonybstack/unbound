@@ -37,6 +37,12 @@ Open a second native or browser client to see another capsule interpolate in.
 | WASD | Move (camera-relative, instant) |
 | Hold RMB | Look (while sheathed) |
 | F | Draw / sheathe |
+| LMB / RMB | Light / heavy (while drawn) |
+| Space | Dodge |
+| Shift | Sprint |
+| 1 / 2 / 3 | Sword / bow / staff |
+| Tab | Lock onto the dummy |
+| Q or MMB | Block (sword) |
 | Esc | Free the cursor |
 
 ## Layout
