@@ -621,6 +621,18 @@ mod tests {
     }
 
     #[test]
+    fn dummy_light_slam_fires_once_on_impact() {
+        assert!(dummy_light_slammed(ACTION_LIGHT, true, ACTION_HIT, false));
+        assert!(!dummy_light_slammed(ACTION_LIGHT, true, ACTION_LIGHT, true));
+        assert!(!dummy_light_slammed(ACTION_NONE, false, ACTION_LIGHT, true));
+        assert!(!dummy_light_slammed(ACTION_HEAVY, true, ACTION_HIT, false));
+        assert!(!dummy_light_slammed(ACTION_LIGHT, true, ACTION_DEAD, false));
+        assert!(!dummy_light_slammed(ACTION_HIT, false, ACTION_HIT, false));
+        assert!(dummy_telegraph_started(ACTION_NONE, false, ACTION_LIGHT, true).is_some());
+        assert!(!dummy_light_slammed(ACTION_NONE, false, ACTION_LIGHT, true));
+    }
+
+    #[test]
     fn remote_dodge_dust_fires_once_on_roll_start() {
         assert!(dodge_started(ACTION_NONE, ACTION_DODGE));
         assert!(dodge_started(ACTION_LIGHT, ACTION_DODGE));

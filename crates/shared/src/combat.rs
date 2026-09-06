@@ -428,7 +428,41 @@ pub fn dummy_heavy_slammed(
     new_action: u8,
     new_pending: bool,
 ) -> bool {
-    prev_pending && !new_pending && prev_action == ACTION_HEAVY && new_action == ACTION_HIT
+    dummy_slammed(
+        prev_action,
+        prev_pending,
+        new_action,
+        new_pending,
+        ACTION_HEAVY,
+    )
+}
+
+/// Club just poked the dirt. True only on the pending_hit true→false edge of a
+/// light into recover so windup ticks, a heavy slam, and a death drop do not
+/// re-fire. Telegraph is the raise; this is the poke.
+pub fn dummy_light_slammed(
+    prev_action: u8,
+    prev_pending: bool,
+    new_action: u8,
+    new_pending: bool,
+) -> bool {
+    dummy_slammed(
+        prev_action,
+        prev_pending,
+        new_action,
+        new_pending,
+        ACTION_LIGHT,
+    )
+}
+
+fn dummy_slammed(
+    prev_action: u8,
+    prev_pending: bool,
+    new_action: u8,
+    new_pending: bool,
+    swing: u8,
+) -> bool {
+    prev_pending && !new_pending && prev_action == swing && new_action == ACTION_HIT
 }
 
 /// Roll just committed. True only on the action rising edge into dodge so

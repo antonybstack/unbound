@@ -2,8 +2,9 @@ use bevy::prelude::*;
 use bevy_stdb::prelude::*;
 use unbound_shared::{
     aim_dir, death_started, dodge_burst_dt, dodge_dir, dummy_body_scale, dummy_club_pitch,
-    dummy_heavy_slammed, dummy_hp_bar_hit, dummy_telegraph_started, dummy_windup_ticks,
-    hp_bar_tint, hyperarmor, hyperarmor_flash_emissive, hyperarmor_flash_scale, incoming_hit_shake,
+    dummy_heavy_slammed, dummy_hp_bar_hit, dummy_light_slammed, dummy_telegraph_started,
+    dummy_windup_ticks, hp_bar_tint, hyperarmor, hyperarmor_flash_emissive, hyperarmor_flash_scale,
+    incoming_hit_shake,
     integrate, invulnerable_for, life_started, loadout, melee_lunge_dt, melee_lunge_dust_radius,
     merge_input_buttons, nameplate_alpha, node_mesh_scale, node_respawned, node_restore_mix,
     predicted_busy_ticks, predicted_release_ticks, remote_dodge_dust, remote_melee_lunge_dust,
@@ -293,6 +294,15 @@ pub fn sync_dummy(
                     at + Vec3::Y * 0.22,
                     Color::srgb(0.82, 0.62, 0.28),
                 );
+            }
+            if dummy_light_slammed(
+                pose.action,
+                pose.pending_hit,
+                msg.new.action,
+                msg.new.pending_hit,
+            ) {
+                let at = Vec3::new(msg.new.x, 0.0, msg.new.z);
+                spawn_dust(&mut commands, &mut meshes, &mut materials, at);
             }
             if death_started(pose.alive, msg.new.alive) {
                 control.sfx_death = true;
