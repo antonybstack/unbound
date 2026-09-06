@@ -133,6 +133,7 @@ fn main() {
                     update_camera,
                     update_hud,
                     update_crosshair,
+                    update_death_veil,
                 )
                     .chain(),
             )
@@ -157,6 +158,10 @@ struct StamFill;
 struct DummyHpFill;
 #[derive(Component)]
 struct Crosshair;
+#[derive(Component)]
+struct DeathVeil;
+#[derive(Component)]
+struct DeathVeilText;
 #[derive(Component)]
 pub struct MainCamera;
 
@@ -301,6 +306,30 @@ fn setup_hud(mut commands: Commands) {
         BackgroundColor(Color::NONE),
         Crosshair,
     ));
+
+    commands
+        .spawn((
+            Node {
+                position_type: PositionType::Absolute,
+                width: Val::Percent(100.0),
+                height: Val::Percent(100.0),
+                justify_content: JustifyContent::Center,
+                align_items: AlignItems::Center,
+                ..default()
+            },
+            BackgroundColor(Color::srgba(0.04, 0.0, 0.0, 0.0)),
+            Pickable::IGNORE,
+            DeathVeil,
+        ))
+        .with_children(|root| {
+            root.spawn((
+                Text::new("YOU DIED"),
+                TextFont::from_font_size(42.0),
+                TextColor(Color::srgba(0.85, 0.18, 0.14, 0.0)),
+                TextLayout::no_wrap(),
+                DeathVeilText,
+            ));
+        });
 }
 
 fn spawn_bar(parent: &mut ChildSpawnerCommands, back: Color, fill: Color, marker: impl Bundle) {
@@ -532,4 +561,19 @@ fn update_crosshair(control: Res<ControlState>, mut q: Query<&mut BorderColor, W
     };
     let alpha = if control.drawn { 0.85 } else { 0.0 };
     *border = BorderColor::all(Color::srgba(0.95, 0.95, 0.88, alpha));
+}
+
+fn update_death_veil(
+    vitals: Res<LocalVitals>,
+    control: Res<ControlState>,
+    mut veil: Query<&mut BackgroundColor, With<DeathVeil>>,
+    mut title: Query<&mut TextColor, With<DeathVeilText>>,
+) {
+    let dead = !vitals.alive || control.pred_action == unbound_shared::ACTION_DEAD;
+    if let Ok(mut bg) = veil.single_mut() {
+        bg.0 = Color::srgba(0.04, 0.0, 0.0, if dead { 0.48 } else { 0.0 });
+    }
+    if let Ok(mut color) = title.single_mut() {
+        color.0 = Color::srgba(0.85, 0.18, 0.14, if dead { 1.0 } else { 0.0 });
+    }
 }

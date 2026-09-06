@@ -42,6 +42,7 @@ pub struct ShotPawn {
 pub struct WeaponVisual {
     pub loadout: u8,
     pub rest: Transform,
+    pub drawn: bool,
 }
 
 #[derive(Component)]
@@ -730,6 +731,10 @@ pub fn pose_weapons(
         let Some(parent) = parent else {
             continue;
         };
+        if !visual.drawn {
+            *transform = visual.rest;
+            continue;
+        }
         let (action, ticks, loadout) = if local_e == Some(parent.parent()) {
             (
                 control.pred_action,
@@ -812,23 +817,21 @@ pub fn refresh_remote_weapons(
             .iter()
             .find(|(_, _vis, parent)| parent.map(|p| p.parent() == entity).unwrap_or(false));
         let mismatch = current
-            .map(|(_, vis, _)| vis.loadout != pose.loadout)
-            .unwrap_or(false);
-        if !pose.drawn || mismatch {
+            .map(|(_, vis, _)| vis.loadout != pose.loadout || vis.drawn != pose.drawn)
+            .unwrap_or(current.is_none());
+        if mismatch {
             for (w, _, parent) in &weapons {
                 if parent.map(|p| p.parent() == entity).unwrap_or(false) {
                     commands.entity(w).despawn();
                 }
             }
-        }
-        if pose.drawn && (current.is_none() || mismatch) {
             attach_weapon(
                 &mut commands,
                 &mut meshes,
                 &mut materials,
                 entity,
                 pose.loadout,
-                true,
+                pose.drawn,
             );
         }
     }
@@ -874,25 +877,39 @@ fn attach_weapon(
     loadout_id: u8,
     drawn: bool,
 ) {
-    if !drawn {
-        return;
-    }
     let def = loadout(loadout_id);
-    let (mesh, color, tf) = match def.id {
-        1 => (
+    let (mesh, color, tf) = match (def.id, drawn) {
+        (1, true) => (
             meshes.add(Cuboid::new(0.08, 0.08, 1.15)),
             Color::srgb(0.45, 0.28, 0.12),
             Transform::from_xyz(0.25, 0.15, -0.55),
         ),
-        2 => (
+        (1, false) => (
+            meshes.add(Cuboid::new(0.08, 0.08, 1.15)),
+            Color::srgb(0.45, 0.28, 0.12),
+            Transform::from_xyz(-0.22, 0.22, 0.08)
+                .with_rotation(Quat::from_rotation_z(1.15) * Quat::from_rotation_x(0.2)),
+        ),
+        (2, true) => (
             meshes.add(Cylinder::new(0.04, 1.4)),
             Color::srgb(0.35, 0.2, 0.55),
             Transform::from_xyz(0.28, 0.1, -0.2).with_rotation(Quat::from_rotation_x(0.2)),
         ),
-        _ => (
+        (2, false) => (
+            meshes.add(Cylinder::new(0.04, 1.4)),
+            Color::srgb(0.35, 0.2, 0.55),
+            Transform::from_xyz(-0.28, 0.2, 0.05).with_rotation(Quat::from_rotation_z(-0.35)),
+        ),
+        (_, true) => (
             meshes.add(Cuboid::new(0.12, 0.04, 0.9)),
             Color::srgb(0.75, 0.75, 0.8),
             Transform::from_xyz(0.38, 0.15, -0.35),
+        ),
+        (_, false) => (
+            meshes.add(Cuboid::new(0.12, 0.04, 0.9)),
+            Color::srgb(0.75, 0.75, 0.8),
+            Transform::from_xyz(-0.28, 0.28, 0.06)
+                .with_rotation(Quat::from_rotation_z(0.55) * Quat::from_rotation_x(-1.15)),
         ),
     };
     let child = commands
@@ -908,6 +925,7 @@ fn attach_weapon(
             WeaponVisual {
                 loadout: loadout_id,
                 rest: tf,
+                drawn,
             },
         ))
         .id();

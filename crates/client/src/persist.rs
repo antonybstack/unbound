@@ -7,11 +7,7 @@ const TOKEN_KEY: &str = "unbound.identity.token";
 
 pub fn load_token() -> Option<String> {
     let token = load_token_raw()?.trim().to_string();
-    if token.is_empty() {
-        None
-    } else {
-        Some(token)
-    }
+    if token.is_empty() { None } else { Some(token) }
 }
 
 pub fn persist_on_connect(mut connected: ReadStdbConnectedMessage) {
@@ -56,11 +52,8 @@ pub fn token_path() -> std::path::PathBuf {
     let mut dir = std::env::var_os("XDG_DATA_HOME")
         .map(std::path::PathBuf::from)
         .or_else(|| {
-            std::env::var_os("HOME").map(|home| {
-                std::path::PathBuf::from(home)
-                    .join(".local")
-                    .join("share")
-            })
+            std::env::var_os("HOME")
+                .map(|home| std::path::PathBuf::from(home).join(".local").join("share"))
         })
         .unwrap_or_else(|| std::path::PathBuf::from("/tmp"));
     dir.push("unbound");
@@ -80,8 +73,6 @@ mod tests {
     fn token_path_lives_under_unbound() {
         let path = token_path();
         assert!(path.ends_with("identity.token"));
-        assert!(path
-            .components()
-            .any(|c| c.as_os_str() == "unbound"));
+        assert!(path.components().any(|c| c.as_os_str() == "unbound"));
     }
 }
