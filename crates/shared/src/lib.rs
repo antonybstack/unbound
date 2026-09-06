@@ -1296,6 +1296,33 @@ mod tests {
     }
 
     #[test]
+    fn shield_flashes_when_a_block_chips() {
+        assert!(block_chip(3));
+        assert!(!block_chip(1));
+        assert!(!block_chip(2));
+        assert!(!block_chip(4));
+        assert!(!block_chip(5));
+        assert!(!block_chip(6));
+        assert!(!block_chip(0));
+        assert!((SHIELD_FLASH_TIME - 0.16).abs() < 1e-4);
+        assert!((shield_flash_mix(0.0)).abs() < 1e-4);
+        assert!((shield_flash_mix(-0.5)).abs() < 1e-4);
+        assert!((shield_flash_mix(SHIELD_FLASH_TIME) - 1.0).abs() < 1e-4);
+        assert!((shield_flash_mix(SHIELD_FLASH_TIME * 2.0) - 1.0).abs() < 1e-4);
+        let mid = shield_flash_mix(SHIELD_FLASH_TIME * 0.5);
+        assert!(mid > 0.0 && mid < 1.0);
+        let rest = shield_flash_scale(0.0);
+        let pop = shield_flash_scale(SHIELD_FLASH_TIME);
+        assert!((rest - 1.0).abs() < 1e-4);
+        assert!(pop > rest);
+        assert!((pop - (1.0 + SHIELD_FLASH_SCALE)).abs() < 1e-4);
+        assert!(pop >= 1.08 && pop <= 1.16);
+        assert!((shield_flash_emissive(0.0)).abs() < 1e-4);
+        assert!((shield_flash_emissive(SHIELD_FLASH_TIME) - SHIELD_FLASH_EMISSIVE).abs() < 1e-4);
+        assert!(SHIELD_FLASH_TIME >= 0.12 && SHIELD_FLASH_TIME <= 0.22);
+    }
+
+    #[test]
     fn dummy_holds_the_slam() {
         assert!(dummy_recover_ticks() >= 6);
         assert!(dummy_club_pitch(ACTION_HIT, dummy_recover_ticks() as f32, 12.0) > 0.2);

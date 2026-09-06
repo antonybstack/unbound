@@ -1,28 +1,29 @@
 use bevy::prelude::*;
 use bevy_stdb::prelude::*;
 use unbound_shared::{
-    aim_dir, death_dust, death_started, dodge_burst_dt, dodge_dir, dummy_body_scale,
-    dummy_club_pitch, dummy_heavy_slammed, dummy_hp_bar_hit, dummy_light_slammed,
-    dummy_telegraph_started, dummy_windup_ticks, hp_bar_tint, hyperarmor,
-    hyperarmor_flash_emissive, hyperarmor_flash_scale, incoming_hit_shake, integrate,
-    invulnerable_for, life_started, loadout, melee_lunge_dt, melee_lunge_dust_radius,
-    merge_input_buttons, nameplate_alpha, node_mesh_scale, node_respawned, node_restore_mix,
-    predicted_busy_ticks, predicted_release_ticks, remote_dodge_dust, remote_melee_lunge_dust,
-    spawn_started, start_drawn_action, start_gather_action, wanderer_hp_bar_hit,
-    wanderer_hp_bar_tint, weapon_extra_rotation, ACTION_BLOCK, ACTION_DEAD, ACTION_DODGE,
-    ACTION_HEAVY, ACTION_HIT, ACTION_LIGHT, ACTION_NONE, BTN_BLOCK, BTN_DODGE, BTN_HEAVY,
-    BTN_LIGHT, BTN_SPRINT, DEATH_DUST_RADIUS, DODGE_SPEED, GATHER_RANGE, HP_FLASH_TIME,
-    HYPERARMOR_FLASH_TIME, MAX_HP, MAX_STAMINA, MOVE_SPEED, PLAYER_HEIGHT, SHOT_CEILING_Y,
-    SHOT_GROUND_Y, SHOT_SPAWN_Y, SPRINT_STAMINA_PER_SEC, STAMINA_REGEN_PER_SEC, TICK_HZ,
+    ACTION_BLOCK, ACTION_DEAD, ACTION_DODGE, ACTION_HEAVY, ACTION_HIT, ACTION_LIGHT, ACTION_NONE,
+    BTN_BLOCK, BTN_DODGE, BTN_HEAVY, BTN_LIGHT, BTN_SPRINT, DEATH_DUST_RADIUS, DODGE_SPEED,
+    GATHER_RANGE, HP_FLASH_TIME, HYPERARMOR_FLASH_TIME, MAX_HP, MAX_STAMINA, MOVE_SPEED,
+    PLAYER_HEIGHT, SHIELD_FLASH_TIME, SHOT_CEILING_Y, SHOT_GROUND_Y, SHOT_SPAWN_Y,
+    SPRINT_STAMINA_PER_SEC, STAMINA_REGEN_PER_SEC, TICK_HZ, aim_dir, block_chip, death_dust,
+    death_started, dodge_burst_dt, dodge_dir, dummy_body_scale, dummy_club_pitch,
+    dummy_heavy_slammed, dummy_hp_bar_hit, dummy_light_slammed, dummy_telegraph_started,
+    dummy_windup_ticks, hp_bar_tint, hyperarmor, hyperarmor_flash_emissive, hyperarmor_flash_scale,
+    incoming_hit_shake, integrate, invulnerable_for, life_started, loadout, melee_lunge_dt,
+    melee_lunge_dust_radius, merge_input_buttons, nameplate_alpha, node_mesh_scale, node_respawned,
+    node_restore_mix, predicted_busy_ticks, predicted_release_ticks, remote_dodge_dust,
+    remote_melee_lunge_dust, shield_flash_emissive, shield_flash_scale, spawn_started,
+    start_drawn_action, start_gather_action, wanderer_hp_bar_hit, wanderer_hp_bar_tint,
+    weapon_extra_rotation,
 };
 
 use crate::camera::ControlState;
 use crate::module_bindings::{
+    Character, CharacterTableAccess, CombatEvent, Dummy, DummyTableAccess, GatherNode,
+    GatherNodeTableAccess, Player, PlayerTableAccess, Projectile, ProjectileTableAccess,
     character_table::characterQueryTableAccess, combat_event_table::combat_eventQueryTableAccess,
     dummy_table::dummyQueryTableAccess, gather_node_table::gather_nodeQueryTableAccess,
-    player_table::playerQueryTableAccess, projectile_table::projectileQueryTableAccess, Character,
-    CharacterTableAccess, CombatEvent, Dummy, DummyTableAccess, GatherNode, GatherNodeTableAccess,
-    Player, PlayerTableAccess, Projectile, ProjectileTableAccess,
+    player_table::playerQueryTableAccess, projectile_table::projectileQueryTableAccess,
 };
 use crate::net::{LocalPlayer, NetworkedIdentity, RemotePlayer, RemoteStep, ServerPose};
 use crate::{MainCamera, StdbConn, StdbSubs, SubKey};
@@ -70,6 +71,7 @@ pub struct WeaponVisual {
 #[derive(Component)]
 pub struct ShieldVisual {
     pub rest: Transform,
+    pub flash: f32,
 }
 
 #[derive(Component)]
@@ -857,10 +859,11 @@ pub fn sync_vitals(
 
 pub fn flash_hits(
     mut events: ReadInsertMessage<CombatEvent>,
-    mut local: Query<&mut Transform, With<LocalPlayer>>,
+    mut local: Query<(Entity, &mut Transform), With<LocalPlayer>>,
     dummy: Query<&DummyPose, With<DummyPawn>>,
     remotes: Query<&NetworkedIdentity, With<RemotePlayer>>,
     mut bars: Query<(&ChildOf, &mut HpBar)>,
+    mut shields: Query<(&ChildOf, &mut ShieldVisual)>,
     conn: Option<Res<StdbConn>>,
     mut flash: ResMut<HitFlash>,
     mut armor: ResMut<DummyArmorFlash>,
@@ -872,13 +875,14 @@ pub fn flash_hits(
     camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
 ) {
     let me = conn.and_then(|c| c.try_identity());
+    let local_entity = local.single().ok().map(|(e, _)| e);
     let cam = camera.single().ok();
     for msg in events.read() {
         let row = &msg.row;
         let involved = me == Some(row.target) || me == Some(row.attacker);
         if (row.kind == 1 || row.kind == 2 || row.kind == 6) && involved {
             if me == Some(row.target) && !row.target_is_dummy {
-                if let Ok(mut t) = local.single_mut() {
+                if let Ok((_, mut t)) = local.single_mut() {
                     t.translation.x = row.x;
                     t.translation.z = row.z;
                     t.translation.y = PLAYER_HEIGHT * 0.5 + 0.06;
@@ -907,6 +911,20 @@ pub fn flash_hits(
                 };
                 if id.identity == row.target {
                     bar.flash = HP_FLASH_TIME;
+                }
+            }
+        }
+        if block_chip(row.kind) {
+            for (parent, mut shield) in &mut shields {
+                let owner = parent.parent();
+                let mine =
+                    local_entity == Some(owner) && me == Some(row.target) && !row.target_is_dummy;
+                let theirs = remotes
+                    .get(owner)
+                    .map(|id| id.identity == row.target)
+                    .unwrap_or(false);
+                if mine || theirs {
+                    shield.flash = SHIELD_FLASH_TIME;
                 }
             }
         }
@@ -1709,7 +1727,10 @@ fn attach_shield(
                 ..default()
             })),
             tf,
-            ShieldVisual { rest: tf },
+            ShieldVisual {
+                rest: tf,
+                flash: 0.0,
+            },
         ))
         .id();
     commands.entity(parent).add_child(shield);
@@ -1728,13 +1749,24 @@ fn despawn_child_visuals<T: Component>(
 }
 
 pub fn pose_shields(
+    time: Res<Time>,
     control: Res<ControlState>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
     remotes: Query<(Entity, &ServerPose), With<RemotePlayer>>,
     local: Query<Entity, With<LocalPlayer>>,
-    mut shields: Query<(&ShieldVisual, &mut Transform, Option<&ChildOf>)>,
+    mut shields: Query<(
+        &mut ShieldVisual,
+        &mut Transform,
+        Option<&ChildOf>,
+        &MeshMaterial3d<StandardMaterial>,
+    )>,
 ) {
     let local_e = local.single().ok();
-    for (visual, mut transform, parent) in &mut shields {
+    let dt = time.delta_secs();
+    for (mut visual, mut transform, parent, mat) in &mut shields {
+        if visual.flash > 0.0 {
+            visual.flash = (visual.flash - dt).max(0.0);
+        }
         let Some(parent) = parent else {
             continue;
         };
@@ -1751,7 +1783,11 @@ pub fn pose_shields(
         } else {
             Transform::IDENTITY
         };
-        *transform = visual.rest * lift;
+        let pop = shield_flash_scale(visual.flash);
+        *transform = (visual.rest * lift).with_scale(Vec3::splat(pop));
+        if let Some(mut m) = materials.get_mut(&mat.0) {
+            m.emissive = LinearRgba::rgb(1.0, 0.92, 0.7) * shield_flash_emissive(visual.flash);
+        }
     }
 }
 

@@ -1,7 +1,7 @@
 use crate::{
-    facing_dot, ACTION_BLOCK, ACTION_DEAD, ACTION_DODGE, ACTION_GATHER, ACTION_HEAVY, ACTION_HIT,
-    ACTION_LIGHT, ACTION_SPAWN, ACTION_SWAP, BTN_BLOCK, BTN_DODGE, BTN_HEAVY, BTN_INTERACT,
-    BTN_LIGHT, GATHER_RANGE, LOADOUT_BOW, LOADOUT_STAFF, LOADOUT_SWORD, TICK_DT, TICK_HZ,
+    ACTION_BLOCK, ACTION_DEAD, ACTION_DODGE, ACTION_GATHER, ACTION_HEAVY, ACTION_HIT, ACTION_LIGHT,
+    ACTION_SPAWN, ACTION_SWAP, BTN_BLOCK, BTN_DODGE, BTN_HEAVY, BTN_INTERACT, BTN_LIGHT,
+    GATHER_RANGE, LOADOUT_BOW, LOADOUT_STAFF, LOADOUT_SWORD, TICK_DT, TICK_HZ, facing_dot,
 };
 
 #[derive(Clone, Copy, Debug)]
@@ -304,6 +304,9 @@ pub const XP_FLASH_TIME: f32 = 0.2;
 pub const HYPERARMOR_FLASH_TIME: f32 = 0.18;
 pub const HYPERARMOR_FLASH_EMISSIVE: f32 = 8.0;
 pub const HYPERARMOR_FLASH_SCALE: f32 = 0.1;
+pub const SHIELD_FLASH_TIME: f32 = 0.16;
+pub const SHIELD_FLASH_EMISSIVE: f32 = 7.0;
+pub const SHIELD_FLASH_SCALE: f32 = 0.12;
 pub const NAMEPLATE_FADE_TIME: f32 = 0.3;
 pub const DEATH_VEIL_FADE_TIME: f32 = 0.28;
 pub const DEATH_VEIL_BG_ALPHA: f32 = 0.48;
@@ -573,11 +576,7 @@ pub fn dummy_strafe_dir(pocket: f32, cooldown: u8) -> f32 {
     if pocket.abs() > 0.01 || cooldown == 0 {
         return 0.0;
     }
-    if (cooldown / 10) % 2 == 0 {
-        1.0
-    } else {
-        -1.0
-    }
+    if (cooldown / 10) % 2 == 0 { 1.0 } else { -1.0 }
 }
 
 pub fn camera_distance(drawn: bool, lock_on: bool, sprinting: bool, dodging: bool) -> f32 {
@@ -906,6 +905,25 @@ pub fn hyperarmor_flash_scale(t: f32) -> f32 {
 
 pub fn hyperarmor_flash_emissive(t: f32) -> f32 {
     hyperarmor_flash_mix(t) * HYPERARMOR_FLASH_EMISSIVE
+}
+
+/// EVT_BLOCK. Hits, kills, dodges, and guard-breaks do not ping the board.
+pub fn block_chip(kind: u8) -> bool {
+    kind == 3
+}
+
+/// 1 at chip, 0 at rest. Quadratic ease so the board snaps white then settles.
+pub fn shield_flash_mix(t: f32) -> f32 {
+    let a = (t / SHIELD_FLASH_TIME).clamp(0.0, 1.0);
+    a * a
+}
+
+pub fn shield_flash_scale(t: f32) -> f32 {
+    1.0 + shield_flash_mix(t) * SHIELD_FLASH_SCALE
+}
+
+pub fn shield_flash_emissive(t: f32) -> f32 {
+    shield_flash_mix(t) * SHIELD_FLASH_EMISSIVE
 }
 
 /// Hold the club at the bottom of the slam so the impact reads.
