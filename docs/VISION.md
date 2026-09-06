@@ -129,7 +129,7 @@ An MMO is a studio. A yard that feels right is a side project.
 | **0 — locomotion** | Playable | Sheathe/draw camera (far WoW vs close shoulder + lock-on frame), predicted WASD, local pawn snaps to server spawn, 30 Hz module, native + browser against one local host. |
 | **1 — three loadouts** | Playable | Sword, bow, staff (`1/2/3`). Stamina, light/heavy, dodge, block. Dummy holds a pocket and winds a club (heavy under 70 HP). Client predicts swing start; arrows/orbs extrapolate; hits shake the camera. |
 | **2 — 1v1 PvP** | Playable | Same combat rules on every player capsule. Two clients (or headless bots) share the yard; hits, blocks, deaths, and respawns apply to both. |
-| **3 — a character that persists** | Playable | `character` row keeps XP/name across disconnect. Skills go up when you land hits. Sheathed `E` gathers wood/ore into Gathering. |
+| **3 — a character that persists** | Playable | `character` row keeps XP/name across disconnect. Client stores the STDB access token so a relaunch is the same wanderer. Skills go up when you land hits. Sheathed `E` gathers wood/ore into Gathering. |
 
 **Not v1:** auction house, quest hubs, raids, OAuth, world streaming, navmesh armies, a character creator deep enough to ship a trailer.
 

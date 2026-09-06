@@ -61,7 +61,11 @@ impl ServerPose {
 }
 
 pub fn connect(mut cmds: StdbCmds) {
-    cmds.connect(StdbConnectOptions::default());
+    let options = match crate::persist::load_token() {
+        Some(token) => StdbConnectOptions::from_token(token),
+        None => StdbConnectOptions::default(),
+    };
+    cmds.connect(options);
 }
 
 pub fn bind_local_player(

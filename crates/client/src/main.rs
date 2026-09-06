@@ -2,6 +2,7 @@ mod camera;
 mod combat;
 mod module_bindings;
 mod net;
+mod persist;
 
 use bevy::prelude::*;
 use bevy_stdb::prelude::*;
@@ -27,6 +28,7 @@ use crate::net::{
     bind_local_player, connect, interpolate_remotes, predict_local, send_input,
     spawn_pawns_from_cache,
 };
+use crate::persist::persist_on_connect;
 
 pub type StdbConn = StdbConnection<DbConnection>;
 pub type StdbSubs = StdbSubscriptions<SubKey, RemoteModule>;
@@ -57,6 +59,9 @@ fn main() {
         .add_event_table::<CombatEventTableAccessor>()
         .with_subscriptions::<SubKey>()
         .with_reconnect(StdbReconnectOptions::default());
+    if let Some(token) = persist::load_token() {
+        stdb = stdb.with_token(token);
+    }
 
     #[cfg(target_arch = "wasm32")]
     {
@@ -91,6 +96,7 @@ fn main() {
             Update,
             (
                 (
+                    persist_on_connect,
                     subscribe_world,
                     spawn_pawns_from_cache,
                     bind_local_player,

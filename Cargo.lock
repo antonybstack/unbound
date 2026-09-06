@@ -6481,6 +6481,7 @@ dependencies = [
  "getrandom 0.4.3",
  "spacetimedb-sdk",
  "unbound-shared",
+ "web-sys",
 ]
 
 [[package]]
