@@ -588,6 +588,24 @@ mod tests {
     }
 
     #[test]
+    fn dummy_heavy_shakes_more_than_a_light() {
+        let light = incoming_hit_shake(1, DUMMY_LIGHT_DAMAGE, true);
+        let heavy = incoming_hit_shake(1, DUMMY_HEAVY_DAMAGE, true);
+        let kill = incoming_hit_shake(2, DUMMY_HEAVY_DAMAGE, true);
+        let brk = incoming_hit_shake(6, DUMMY_LIGHT_DAMAGE, true);
+        let pvp = incoming_hit_shake(1, 28.0, false);
+        assert!((light - CAM_SHAKE_HIT).abs() < 1e-5);
+        assert!((heavy - CAM_SHAKE_HEAVY).abs() < 1e-5);
+        assert!(heavy > light);
+        assert!((kill - CAM_SHAKE_HEAVY).abs() < 1e-5);
+        assert!((brk - CAM_SHAKE_BREAK).abs() < 1e-5);
+        assert!((pvp - CAM_SHAKE_HIT).abs() < 1e-5);
+        assert!(CAM_SHAKE_HEAVY >= 0.22 && CAM_SHAKE_HEAVY <= 0.28);
+        assert!((CAM_SHAKE_HIT - CAM_SHAKE_TIME).abs() < 1e-5);
+        assert!((camera_shake_amp(CAM_SHAKE_HEAVY) - camera_shake_amp(CAM_SHAKE_HIT)).abs() < 1e-5);
+    }
+
+    #[test]
     fn camera_closes_when_drawn() {
         assert!((camera_distance(false, false, false) - CAM_SHEATHED).abs() < 1e-4);
         assert!(camera_distance(true, false, false) < camera_distance(false, false, false));

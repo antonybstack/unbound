@@ -3,13 +3,13 @@ use bevy_stdb::prelude::*;
 use unbound_shared::{
     aim_dir, death_started, dodge_burst_dt, dodge_dir, dummy_body_scale, dummy_club_pitch,
     dummy_telegraph_started, dummy_windup_ticks, hyperarmor, hyperarmor_flash_emissive,
-    hyperarmor_flash_scale, integrate, invulnerable_for, life_started, loadout, melee_lunge_dt,
-    merge_input_buttons, predicted_busy_ticks, predicted_release_ticks, start_drawn_action,
-    start_gather_action, weapon_extra_rotation, ACTION_BLOCK, ACTION_DEAD, ACTION_DODGE,
-    ACTION_HEAVY, ACTION_HIT, ACTION_LIGHT, ACTION_NONE, BTN_BLOCK, BTN_DODGE, BTN_HEAVY,
-    BTN_LIGHT, BTN_SPRINT, DODGE_SPEED, GATHER_RANGE, HYPERARMOR_FLASH_TIME, MAX_HP, MAX_STAMINA,
-    MOVE_SPEED, PLAYER_HEIGHT, SHOT_CEILING_Y, SHOT_GROUND_Y, SHOT_SPAWN_Y, SPRINT_STAMINA_PER_SEC,
-    STAMINA_REGEN_PER_SEC, TICK_HZ,
+    hyperarmor_flash_scale, incoming_hit_shake, integrate, invulnerable_for, life_started, loadout,
+    melee_lunge_dt, merge_input_buttons, predicted_busy_ticks, predicted_release_ticks,
+    start_drawn_action, start_gather_action, weapon_extra_rotation, ACTION_BLOCK, ACTION_DEAD,
+    ACTION_DODGE, ACTION_HEAVY, ACTION_HIT, ACTION_LIGHT, ACTION_NONE, BTN_BLOCK, BTN_DODGE,
+    BTN_HEAVY, BTN_LIGHT, BTN_SPRINT, DODGE_SPEED, GATHER_RANGE, HYPERARMOR_FLASH_TIME, MAX_HP,
+    MAX_STAMINA, MOVE_SPEED, PLAYER_HEIGHT, SHOT_CEILING_Y, SHOT_GROUND_Y, SHOT_SPAWN_Y,
+    SPRINT_STAMINA_PER_SEC, STAMINA_REGEN_PER_SEC, TICK_HZ,
 };
 
 use crate::camera::ControlState;
@@ -778,7 +778,11 @@ pub fn flash_hits(
                     t.translation.y = PLAYER_HEIGHT * 0.5 + 0.06;
                 }
                 flash.t = 0.16;
-                control.shake = control.shake.max(if row.kind == 6 { 0.24 } else { 0.16 });
+                control.shake = control.shake.max(incoming_hit_shake(
+                    row.kind,
+                    row.damage,
+                    row.attacker_is_dummy,
+                ));
             } else if me == Some(row.attacker) && !row.attacker_is_dummy {
                 control.shake = control.shake.max(0.08);
                 control.hitstop =

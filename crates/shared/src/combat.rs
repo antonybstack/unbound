@@ -277,6 +277,9 @@ pub const CAM_SPRINT_EXTRA: f32 = 0.55;
 pub const CAM_LOCK_MIX: f32 = 0.32;
 pub const CAM_SHOULDER: f32 = 0.42;
 pub const CAM_SHAKE_TIME: f32 = 0.16;
+pub const CAM_SHAKE_HIT: f32 = 0.16;
+pub const CAM_SHAKE_HEAVY: f32 = 0.24;
+pub const CAM_SHAKE_BREAK: f32 = 0.24;
 pub const CAM_BLOCK_RADIUS: f32 = 0.95;
 pub const LOCK_RANGE: f32 = 16.0;
 pub const LOCK_PULSE_TIME: f32 = 0.22;
@@ -438,6 +441,19 @@ pub fn lock_aim_pitch(from_y: f32, to_y: f32, dist_xz: f32) -> f32 {
 pub fn camera_shake_amp(t: f32) -> f32 {
     let a = (t / CAM_SHAKE_TIME).clamp(0.0, 1.0);
     a * a * 0.16
+}
+
+/// Seconds of camera shake when a hit lands on you. Dummy heavies rumble
+/// longer than lights; a guard-break matches the heavy. PvP lights and
+/// heavies stay on the light clock so dummy mass is the extra read.
+pub fn incoming_hit_shake(kind: u8, damage: f32, attacker_is_dummy: bool) -> f32 {
+    if kind == 6 {
+        CAM_SHAKE_BREAK
+    } else if attacker_is_dummy && damage >= DUMMY_HEAVY_DAMAGE {
+        CAM_SHAKE_HEAVY
+    } else {
+        CAM_SHAKE_HIT
+    }
 }
 
 /// Ring scale after Tab grabs a lock. Oversized at t=LOCK_PULSE_TIME, 1 at rest.
