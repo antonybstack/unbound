@@ -4,8 +4,8 @@ use unbound_shared::{
     ACTION_BLOCK, ACTION_DODGE, ACTION_HEAVY, ACTION_HIT, ACTION_LIGHT, ACTION_NONE, BTN_BLOCK,
     BTN_DODGE, BTN_HEAVY, BTN_LIGHT, BTN_SPRINT, DODGE_SPEED, GATHER_RANGE, MAX_HP, MAX_STAMINA,
     MOVE_SPEED, PLAYER_HEIGHT, SHOT_CEILING_Y, SHOT_GROUND_Y, SHOT_SPAWN_Y, SPRINT_STAMINA_PER_SEC,
-    STAMINA_REGEN_PER_SEC, TICK_HZ, aim_dir, dodge_burst_dt, dodge_dir, dodge_iframe_for,
-    dummy_club_pitch, dummy_windup_ticks, integrate, loadout, melee_lunge_dt, merge_input_buttons,
+    STAMINA_REGEN_PER_SEC, TICK_HZ, aim_dir, dodge_burst_dt, dodge_dir, dummy_club_pitch,
+    dummy_windup_ticks, integrate, invulnerable_for, loadout, melee_lunge_dt, merge_input_buttons,
     predicted_busy_ticks, predicted_release_ticks, start_drawn_action, start_gather_action,
     weapon_extra_rotation,
 };
@@ -802,11 +802,11 @@ pub fn tick_hit_flash(
     let Some(mut m) = materials.get_mut(&mat.0) else {
         return;
     };
-    let ghost = control.pred_action == ACTION_DODGE
-        && dodge_iframe_for(
-            control.pred_ticks.round().clamp(0.0, 255.0) as u8,
-            control.pred_loadout,
-        );
+    let ghost = invulnerable_for(
+        control.pred_action,
+        control.pred_ticks.round().clamp(0.0, 255.0) as u8,
+        control.pred_loadout,
+    );
     let mix = (flash.t / 0.16).clamp(0.0, 1.0);
     let mut color = Color::srgb(0.82, 0.62, 0.28).mix(&Color::srgb(0.95, 0.25, 0.18), mix);
     if ghost {
@@ -828,11 +828,11 @@ pub fn tick_remote_ghost(
         let Some(mut m) = materials.get_mut(&mat.0) else {
             continue;
         };
-        let ghost = pose.action == ACTION_DODGE
-            && dodge_iframe_for(
-                pose.action_ticks.round().clamp(0.0, 255.0) as u8,
-                pose.loadout,
-            );
+        let ghost = invulnerable_for(
+            pose.action,
+            pose.action_ticks.round().clamp(0.0, 255.0) as u8,
+            pose.loadout,
+        );
         let mut color = if pose.alive {
             Color::srgb(0.35, 0.48, 0.62)
         } else {

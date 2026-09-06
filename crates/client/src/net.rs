@@ -1,8 +1,8 @@
 use bevy::prelude::*;
 use bevy_stdb::prelude::*;
 use unbound_shared::{
-    ACTION_DEAD, ACTION_DODGE, ACTION_HIT, ACTION_NONE, BTN_SPRINT, DODGE_SPEED, INPUT_SEND_HZ,
-    MOVE_SPEED, PLAYER_HEIGHT, RECONCILE_SNAP, SPRINT_SPEED, TICK_HZ, integrate,
+    ACTION_DEAD, ACTION_DODGE, ACTION_HIT, ACTION_NONE, ACTION_SPAWN, BTN_SPRINT, DODGE_SPEED,
+    INPUT_SEND_HZ, MOVE_SPEED, PLAYER_HEIGHT, RECONCILE_SNAP, SPRINT_SPEED, TICK_HZ, integrate,
     merge_input_buttons, move_lock,
 };
 
@@ -173,15 +173,21 @@ pub fn apply_player_updates(
                 let predicted = Vec3::new(transform.translation.x, 0.0, transform.translation.z);
                 let server = Vec3::new(msg.new.x, 0.0, msg.new.z);
                 let dead = !msg.new.alive || msg.new.action == ACTION_DEAD;
-                if dead || predicted.distance(server) > RECONCILE_SNAP {
+                let spawning = msg.new.action == ACTION_SPAWN;
+                if dead || spawning || predicted.distance(server) > RECONCILE_SNAP {
                     transform.translation.x = msg.new.x;
                     transform.translation.z = msg.new.z;
                 }
-                if msg.new.action == ACTION_HIT || msg.new.action == ACTION_DEAD {
+                if msg.new.action == ACTION_HIT
+                    || msg.new.action == ACTION_DEAD
+                    || msg.new.action == ACTION_SPAWN
+                {
                     control.pred_action = msg.new.action;
                     control.pred_ticks = msg.new.action_ticks as f32;
                 } else if msg.new.action == ACTION_NONE
-                    && (control.pred_action == ACTION_HIT || control.pred_action == ACTION_DEAD)
+                    && (control.pred_action == ACTION_HIT
+                        || control.pred_action == ACTION_DEAD
+                        || control.pred_action == ACTION_SPAWN)
                 {
                     control.pred_action = ACTION_NONE;
                     control.pred_ticks = 0.0;

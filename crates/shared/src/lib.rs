@@ -41,6 +41,7 @@ pub const ACTION_SWAP: u8 = 5;
 pub const ACTION_HIT: u8 = 6;
 pub const ACTION_DEAD: u8 = 7;
 pub const ACTION_GATHER: u8 = 8;
+pub const ACTION_SPAWN: u8 = 9;
 
 pub const SKILL_MELEE: u8 = 0;
 pub const SKILL_RANGED: u8 = 1;
@@ -342,14 +343,23 @@ mod tests {
         assert!(action_busy(ACTION_LIGHT));
         assert!(action_busy(ACTION_GATHER));
         assert!(action_busy(ACTION_DEAD));
+        assert!(action_busy(ACTION_SPAWN));
         assert!(!action_busy(ACTION_NONE));
         assert!(move_lock(ACTION_HEAVY));
         assert!(move_lock(ACTION_GATHER));
         assert!(!move_lock(ACTION_LIGHT));
+        assert!(!move_lock(ACTION_SPAWN));
         assert!(invulnerable(ACTION_DODGE, 4));
         assert!(!invulnerable(ACTION_DODGE, dodge_ticks()));
         assert!(!invulnerable(ACTION_DODGE, 0));
         assert!(!invulnerable(ACTION_LIGHT, 4));
+        assert!(invulnerable_for(
+            ACTION_SPAWN,
+            spawn_protect_ticks(),
+            LOADOUT_SWORD
+        ));
+        assert!(!invulnerable_for(ACTION_SPAWN, 0, LOADOUT_SWORD));
+        assert!(spawn_protect_ticks() > dodge_ticks());
         assert!(blocking(ACTION_BLOCK));
     }
 

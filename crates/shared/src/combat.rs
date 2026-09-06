@@ -1,7 +1,7 @@
 use crate::{
     ACTION_BLOCK, ACTION_DEAD, ACTION_DODGE, ACTION_GATHER, ACTION_HEAVY, ACTION_HIT, ACTION_LIGHT,
-    ACTION_SWAP, BTN_BLOCK, BTN_DODGE, BTN_HEAVY, BTN_INTERACT, BTN_LIGHT, LOADOUT_BOW,
-    LOADOUT_STAFF, LOADOUT_SWORD, TICK_DT, TICK_HZ, facing_dot,
+    ACTION_SPAWN, ACTION_SWAP, BTN_BLOCK, BTN_DODGE, BTN_HEAVY, BTN_INTERACT, BTN_LIGHT,
+    LOADOUT_BOW, LOADOUT_STAFF, LOADOUT_SWORD, TICK_DT, TICK_HZ, facing_dot,
 };
 
 #[derive(Clone, Copy, Debug)]
@@ -107,6 +107,10 @@ pub fn death_respawn_ticks() -> u8 {
     (3.0 * TICK_HZ) as u8
 }
 
+pub fn spawn_protect_ticks() -> u8 {
+    (1.25 * TICK_HZ) as u8
+}
+
 pub fn gather_ticks() -> u8 {
     (1.35 * TICK_HZ) as u8
 }
@@ -131,6 +135,7 @@ pub fn action_busy(action: u8) -> bool {
         || action == ACTION_HIT
         || action == ACTION_GATHER
         || action == ACTION_DEAD
+        || action == ACTION_SPAWN
 }
 
 pub fn move_lock(action: u8) -> bool {
@@ -237,7 +242,8 @@ pub fn invulnerable(action: u8, ticks_left: u8) -> bool {
 }
 
 pub fn invulnerable_for(action: u8, ticks_left: u8, loadout: u8) -> bool {
-    action == ACTION_DODGE && dodge_iframe_for(ticks_left, loadout)
+    (action == ACTION_DODGE && dodge_iframe_for(ticks_left, loadout))
+        || (action == ACTION_SPAWN && ticks_left > 0)
 }
 
 /// Buttons that are meaningful as a 1-frame press and must be latched until `set_input`.
@@ -604,6 +610,7 @@ pub fn action_label(action: u8) -> &'static str {
         ACTION_SWAP => "SWAP",
         ACTION_HIT => "HIT",
         ACTION_DEAD => "DEAD",
+        ACTION_SPAWN => "GRACE",
         ACTION_GATHER => "GATHER",
         _ => "",
     }

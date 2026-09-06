@@ -1215,7 +1215,8 @@ fn respawn_player(player: &mut Player) {
     player.hp = MAX_HP;
     player.stamina = MAX_STAMINA;
     player.alive = true;
-    player.action = ACTION_NONE;
+    player.action = unbound_shared::ACTION_SPAWN;
+    player.action_ticks = unbound_shared::spawn_protect_ticks();
     player.pending_hit = false;
     player.x = 0.0;
     player.z = 6.0;
