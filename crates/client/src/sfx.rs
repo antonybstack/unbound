@@ -170,6 +170,14 @@ pub fn play_local_sfx(
         commands.spawn((AudioPlayer::new(sfx.kill.clone()), settings));
         control.sfx_rise = false;
     }
+    if control.sfx_level {
+        // Gold floater already names the skill. The ding was silent.
+        let mut settings = PlaybackSettings::DESPAWN;
+        settings.volume = bevy::audio::Volume::Linear(0.32);
+        settings.speed = 1.82;
+        commands.spawn((AudioPlayer::new(sfx.kill.clone()), settings));
+        control.sfx_level = false;
+    }
     if control.sfx_lock != 0 {
         let acquire = control.sfx_lock > 0;
         let mut settings = PlaybackSettings::DESPAWN;

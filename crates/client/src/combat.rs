@@ -596,6 +596,7 @@ pub fn sync_nodes(
 
 pub fn sync_vitals(
     mut vitals: ResMut<LocalVitals>,
+    mut control: ResMut<ControlState>,
     conn: Option<Res<StdbConn>>,
     mut characters: ReadInsertMessage<Character>,
     mut char_updates: ReadUpdateMessage<Character>,
@@ -682,6 +683,7 @@ pub fn sync_vitals(
         ];
         for (skill, up) in ups {
             let Some(lvl) = up else { continue };
+            control.sfx_level = true;
             let text = format!("{} {}", unbound_shared::skill_label(skill), lvl);
             vitals.log = text.clone();
             if let (Some((cam, cam_tf)), Some(pos)) = (cam, me_pos) {
