@@ -209,7 +209,7 @@ fn think_gather(conn: &DbConnection, me: &Player) -> (f32, f32, bool, u32, u8) {
 
 fn identity_short(id: Identity) -> String {
     let b = id.to_byte_array();
-    format!("{:02x}{:02x}", b[30], b[31])
+    format!("{:04x}", unbound_shared::wanderer_tag(&b))
 }
 
 struct Args {

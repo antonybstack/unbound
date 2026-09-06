@@ -6,7 +6,7 @@ use crate::{LocalPlayer, MainCamera};
 use unbound_shared::{ACTION_NONE, MAX_STAMINA, PLAYER_HEIGHT};
 
 const LOOK_SENS: f32 = 0.004;
-const CAMERA_DISTANCE: f32 = 5.5;
+const CAMERA_DISTANCE: f32 = 6.8;
 
 #[derive(Resource)]
 pub struct ControlState {
@@ -31,7 +31,7 @@ impl Default for ControlState {
         Self {
             drawn: false,
             yaw: 0.0,
-            pitch: -0.35,
+            pitch: -0.48,
             dir_x: 0.0,
             dir_z: 0.0,
             send_accum: 0.0,

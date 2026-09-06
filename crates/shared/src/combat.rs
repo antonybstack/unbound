@@ -1,7 +1,7 @@
 use crate::{
     ACTION_BLOCK, ACTION_DEAD, ACTION_DODGE, ACTION_GATHER, ACTION_HEAVY, ACTION_HIT, ACTION_LIGHT,
-    ACTION_SWAP, BTN_BLOCK, BTN_DODGE, BTN_HEAVY, BTN_INTERACT, BTN_LIGHT, LOADOUT_BOW, LOADOUT_STAFF,
-    LOADOUT_SWORD, TICK_DT, TICK_HZ,
+    ACTION_SWAP, BTN_BLOCK, BTN_DODGE, BTN_HEAVY, BTN_INTERACT, BTN_LIGHT, LOADOUT_BOW,
+    LOADOUT_STAFF, LOADOUT_SWORD, TICK_DT, TICK_HZ,
 };
 
 #[derive(Clone, Copy, Debug)]
@@ -247,7 +247,11 @@ pub fn start_drawn_action(
     None
 }
 
-pub fn start_gather_action(current_action: u8, buttons: u32, in_range: bool) -> Option<ActionStart> {
+pub fn start_gather_action(
+    current_action: u8,
+    buttons: u32,
+    in_range: bool,
+) -> Option<ActionStart> {
     if action_busy(current_action) {
         return None;
     }
@@ -289,8 +293,14 @@ pub fn predicted_busy_ticks(start: &ActionStart) -> u8 {
 pub fn swing_progress(action: u8, ticks_left: f32, loadout_id: u8) -> f32 {
     let def = loadout(loadout_id);
     let (windup, recover) = match action {
-        ACTION_HEAVY => (def.heavy_windup_ticks as f32, def.heavy_recover_ticks as f32),
-        ACTION_LIGHT => (def.light_windup_ticks as f32, def.light_recover_ticks as f32),
+        ACTION_HEAVY => (
+            def.heavy_windup_ticks as f32,
+            def.heavy_recover_ticks as f32,
+        ),
+        ACTION_LIGHT => (
+            def.light_windup_ticks as f32,
+            def.light_recover_ticks as f32,
+        ),
         _ => return 0.0,
     };
     let total = windup + recover;

@@ -11,7 +11,7 @@ use unbound_shared::{
     DUMMY_AGGRO_RANGE, DUMMY_CHASE_SPEED, DUMMY_HEAVY_DAMAGE, DUMMY_HOME_SPEED, DUMMY_LEASH_RANGE,
     DUMMY_LIGHT_DAMAGE, DUMMY_MELEE_RANGE, DUMMY_STRIKE_RANGE, GATHER_RANGE, HP_REGEN_PER_SEC,
     KNOCKBACK_HEAVY, KNOCKBACK_LIGHT, LOADOUT_SWORD, MAX_HP, MAX_STAMINA, MOVE_SPEED, NODE_ORE,
-    NODE_WOOD, PLAYER_RADIUS, SKILL_DEFENCE, SKILL_GATHERING, SKILL_HITPOINTS, SKILL_MAGIC,
+    PLAYER_RADIUS, SKILL_DEFENCE, SKILL_GATHERING, SKILL_HITPOINTS, SKILL_MAGIC,
     SKILL_MELEE, SKILL_RANGED, SPRINT_SPEED, SPRINT_STAMINA_PER_SEC, STAMINA_REGEN_PER_SEC, TICK_DT,
     WORLD_HALF,
 };
@@ -159,9 +159,9 @@ pub fn init(ctx: &ReducerContext) -> Result<(), String> {
         alive: true,
         cooldown: 20,
     })?;
-    spawn_node(ctx, 1, NODE_WOOD, -12.0, 2.0, 4)?;
-    spawn_node(ctx, 2, NODE_WOOD, 12.0, 2.0, 4)?;
-    spawn_node(ctx, 3, NODE_ORE, 0.0, 14.0, 3)?;
+    for home in unbound_shared::NODE_HOMES {
+        spawn_node(ctx, home.id, home.kind, home.x, home.z, home.charges)?;
+    }
     log::info!("unbound module initialized (combat yard + gather)");
     Ok(())
 }
@@ -767,11 +767,22 @@ fn tick_projectiles(ctx: &ReducerContext) {
 fn tick_nodes(ctx: &ReducerContext) {
     let nodes: Vec<GatherNode> = ctx.db.gather_node().iter().collect();
     for mut node in nodes {
+        let mut dirty = false;
+        if let Some(home) = unbound_shared::NODE_HOMES.iter().find(|h| h.id == node.id) {
+            if (node.x - home.x).abs() > 0.05 || (node.z - home.z).abs() > 0.05 {
+                node.x = home.x;
+                node.z = home.z;
+                dirty = true;
+            }
+        }
         if node.charges == 0 && node.cooldown > 0 {
             node.cooldown -= 1;
             if node.cooldown == 0 {
                 node.charges = if node.kind == NODE_ORE { 3 } else { 4 };
             }
+            dirty = true;
+        }
+        if dirty {
             ctx.db.gather_node().id().update(node);
         }
     }
@@ -1057,7 +1068,7 @@ fn default_character(identity: Identity, name: String) -> Character {
 
 fn default_name(identity: Identity) -> String {
     let bytes = identity.to_byte_array();
-    format!("Wanderer-{:02x}{:02x}", bytes[30], bytes[31])
+    format!("Wanderer-{:04x}", unbound_shared::wanderer_tag(&bytes))
 }
 
 fn sanitize_name(name: String) -> Result<String, String> {

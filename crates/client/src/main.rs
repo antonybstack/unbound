@@ -6,16 +6,17 @@ mod net;
 use bevy::prelude::*;
 use bevy_stdb::prelude::*;
 use unbound_shared::{
-    BTN_BLOCK, BTN_DODGE, BTN_HEAVY, BTN_INTERACT, BTN_LIGHT, BTN_SPRINT, GATHER_RANGE,
-    MAX_HP, MAX_STAMINA, PLAYER_HEIGHT, action_label, loadout,
+    BTN_BLOCK, BTN_DODGE, BTN_HEAVY, BTN_INTERACT, BTN_LIGHT, BTN_SPRINT, GATHER_RANGE, MAX_HP,
+    MAX_STAMINA, PLAYER_HEIGHT, action_label, loadout,
 };
 
 use crate::camera::{ControlState, update_camera, update_cursor};
 use crate::combat::{
     DummyPawn, HitFlash, LocalVitals, WeaponState, apply_predicted_starts, flash_hits,
-    interpolate_dummy, pose_dummy_club, pose_weapons, refresh_remote_weapons, refresh_weapon,
-    subscribe_world, sync_dummy, sync_nodes, sync_projectiles, sync_vitals, tick_dummy_pose,
-    tick_hit_flash, tick_prediction, update_floaters,
+    interpolate_dummy, pose_dummy_club, pose_hp_bars, pose_weapons, refresh_remote_weapons,
+    refresh_weapon, subscribe_world, sync_dummy, sync_nameplates, sync_nodes, sync_projectiles,
+    sync_vitals, tick_dummy_pose, tick_hit_flash, tick_prediction, update_floaters,
+    update_nameplates,
 };
 use crate::module_bindings::{
     CharacterTableAccessor, CombatEventTableAccessor, DbConnection, DummyTableAccessor,
@@ -100,11 +101,14 @@ fn main() {
                     sync_dummy,
                     tick_dummy_pose,
                     interpolate_dummy,
+                    pose_hp_bars,
                     sync_projectiles,
                     sync_nodes,
                     sync_vitals,
                     flash_hits,
                     update_floaters,
+                    sync_nameplates,
+                    update_nameplates,
                 )
                     .chain(),
                 (

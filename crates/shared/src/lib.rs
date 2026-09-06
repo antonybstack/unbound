@@ -59,6 +59,49 @@ pub const GATHER_RANGE: f32 = 2.4;
 pub const NODE_WOOD_XP: u64 = 10;
 pub const NODE_ORE_XP: u64 = 14;
 
+#[derive(Clone, Copy, Debug)]
+pub struct NodeHome {
+    pub id: u32,
+    pub kind: u8,
+    pub x: f32,
+    pub z: f32,
+    pub charges: u8,
+}
+
+/// Wood flanks the walk to the dummy; ore sits past it. All three read from spawn look.
+pub const NODE_HOMES: [NodeHome; 3] = [
+    NodeHome {
+        id: 1,
+        kind: NODE_WOOD,
+        x: -5.2,
+        z: -4.5,
+        charges: 4,
+    },
+    NodeHome {
+        id: 2,
+        kind: NODE_WOOD,
+        x: 5.2,
+        z: -4.5,
+        charges: 4,
+    },
+    NodeHome {
+        id: 3,
+        kind: NODE_ORE,
+        x: 0.0,
+        z: -15.0,
+        charges: 3,
+    },
+];
+
+/// Stable short tag from a 32-byte identity. Mixes several words so last-byte collisions
+/// (common in local STDB identities) do not produce identical wanderer names.
+pub fn wanderer_tag(bytes: &[u8; 32]) -> u16 {
+    let a = u16::from_le_bytes([bytes[0], bytes[1]]);
+    let b = u16::from_le_bytes([bytes[14], bytes[15]]);
+    let c = u16::from_le_bytes([bytes[30], bytes[31]]);
+    a ^ b ^ c
+}
+
 /// Yaw 0 looks down -Z (Bevy camera default).
 pub fn yaw_forward(yaw: f32) -> (f32, f32) {
     (-yaw.sin(), -yaw.cos())
@@ -280,7 +323,8 @@ mod tests {
                 .is_none()
         );
         assert!(
-            start_drawn_action(ACTION_HIT, LOADOUT_SWORD, LOADOUT_SWORD, 100.0, BTN_DODGE).is_none()
+            start_drawn_action(ACTION_HIT, LOADOUT_SWORD, LOADOUT_SWORD, 100.0, BTN_DODGE)
+                .is_none()
         );
     }
 
@@ -350,9 +394,33 @@ mod tests {
         assert!(
             start_drawn_action(ACTION_NONE, LOADOUT_BOW, LOADOUT_BOW, 100.0, BTN_BLOCK).is_none()
         );
-        let start =
-            start_drawn_action(ACTION_NONE, LOADOUT_SWORD, LOADOUT_SWORD, 100.0, BTN_BLOCK).unwrap();
+        let start = start_drawn_action(ACTION_NONE, LOADOUT_SWORD, LOADOUT_SWORD, 100.0, BTN_BLOCK)
+            .unwrap();
         assert_eq!(start.action, ACTION_BLOCK);
         assert!(!action_busy(ACTION_BLOCK));
+    }
+
+    #[test]
+    fn wanderer_tag_mixes_more_than_tail_bytes() {
+        let mut a = [0u8; 32];
+        a[30] = 0x00;
+        a[31] = 0xc2;
+        let mut b = a;
+        b[0] = 0x11;
+        b[1] = 0x22;
+        assert_ne!(wanderer_tag(&a), wanderer_tag(&b));
+        assert_eq!(wanderer_tag(&a), wanderer_tag(&a));
+    }
+
+    #[test]
+    fn node_homes_sit_in_spawn_look() {
+        for node in NODE_HOMES {
+            assert!(
+                node.z < 0.0,
+                "node {} should be down -Z from spawn",
+                node.id
+            );
+            assert!(node.x.abs() < 12.0);
+        }
     }
 }

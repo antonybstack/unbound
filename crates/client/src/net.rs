@@ -22,7 +22,7 @@ pub struct NetworkedIdentity {
     pub identity: spacetimedb_sdk::Identity,
 }
 
-#[derive(Component, Clone, Copy)]
+#[derive(Component, Clone)]
 #[allow(dead_code)]
 pub struct ServerPose {
     pub x: f32,
@@ -35,6 +35,7 @@ pub struct ServerPose {
     pub alive: bool,
     pub action: u8,
     pub action_ticks: u8,
+    pub name: String,
 }
 
 impl ServerPose {
@@ -50,6 +51,7 @@ impl ServerPose {
             alive: player.alive,
             action: player.action,
             action_ticks: player.action_ticks,
+            name: player.name.clone(),
         }
     }
 
@@ -233,8 +235,14 @@ pub fn predict_local(
         return;
     };
     if move_lock(control.pred_action) {
-        transform.translation.y = PLAYER_HEIGHT * 0.5;
+        let dead = control.pred_action == ACTION_DEAD;
+        transform.translation.y = if dead { 0.22 } else { PLAYER_HEIGHT * 0.5 };
         transform.rotation = Quat::from_rotation_y(control.yaw);
+        transform.scale = if dead {
+            Vec3::new(1.0, 0.22, 1.0)
+        } else {
+            Vec3::ONE
+        };
         return;
     }
     let speed = if control.pred_action == ACTION_DODGE {
@@ -255,8 +263,14 @@ pub fn predict_local(
     );
     transform.translation.x = x;
     transform.translation.z = z;
-    transform.translation.y = PLAYER_HEIGHT * 0.5;
+    let dead = control.pred_action == ACTION_DEAD;
+    transform.translation.y = if dead { 0.22 } else { PLAYER_HEIGHT * 0.5 };
     transform.rotation = Quat::from_rotation_y(control.yaw);
+    transform.scale = if dead {
+        Vec3::new(1.0, 0.22, 1.0)
+    } else {
+        Vec3::ONE
+    };
 }
 
 pub fn send_input(time: Res<Time>, mut control: ResMut<ControlState>, conn: Option<Res<StdbConn>>) {
@@ -297,23 +311,38 @@ fn spawn_pawn(
     } else {
         Color::srgb(0.35, 0.48, 0.62)
     };
-    let mut entity = commands.spawn((
-        Mesh3d(meshes.add(Capsule3d::new(0.35, 0.9))),
-        MeshMaterial3d(materials.add(StandardMaterial {
-            base_color: color,
-            perceptual_roughness: 0.7,
-            ..default()
-        })),
-        Transform::from_xyz(player.x, PLAYER_HEIGHT * 0.5, player.z)
-            .with_rotation(Quat::from_rotation_y(player.yaw)),
-        NetworkedIdentity {
-            identity: player.identity,
-        },
-        ServerPose::from_player(player),
-    ));
+    let parent = commands
+        .spawn((
+            Mesh3d(meshes.add(Capsule3d::new(0.35, 0.9))),
+            MeshMaterial3d(materials.add(StandardMaterial {
+                base_color: color,
+                perceptual_roughness: 0.7,
+                ..default()
+            })),
+            Transform::from_xyz(player.x, PLAYER_HEIGHT * 0.5, player.z)
+                .with_rotation(Quat::from_rotation_y(player.yaw)),
+            NetworkedIdentity {
+                identity: player.identity,
+            },
+            ServerPose::from_player(player),
+        ))
+        .id();
     if is_local {
-        entity.insert(LocalPlayer);
+        commands.entity(parent).insert(LocalPlayer);
     } else {
-        entity.insert(RemotePlayer);
+        commands.entity(parent).insert(RemotePlayer);
+        let bar = commands
+            .spawn((
+                Mesh3d(meshes.add(Cuboid::new(1.0, 0.1, 0.04))),
+                MeshMaterial3d(materials.add(StandardMaterial {
+                    base_color: Color::srgb(0.25, 0.55, 0.85),
+                    unlit: true,
+                    ..default()
+                })),
+                Transform::from_xyz(0.0, 1.2, 0.0),
+                crate::combat::HpBar,
+            ))
+            .id();
+        commands.entity(parent).add_child(bar);
     }
 }

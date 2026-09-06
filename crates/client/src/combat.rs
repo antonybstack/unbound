@@ -2,10 +2,10 @@ use bevy::prelude::*;
 use bevy_stdb::prelude::*;
 use unbound_shared::{
     ACTION_BLOCK, ACTION_DODGE, ACTION_HEAVY, ACTION_HIT, ACTION_LIGHT, ACTION_NONE, BTN_BLOCK,
-    BTN_SPRINT, GATHER_RANGE, MAX_HP, MAX_STAMINA, PLAYER_HEIGHT, SPRINT_STAMINA_PER_SEC,
-    STAMINA_REGEN_PER_SEC, TICK_HZ, dodge_burst_dt, dodge_dir, dummy_club_pitch, dummy_windup_ticks,
-    integrate, loadout, merge_input_buttons, predicted_busy_ticks, start_drawn_action,
-    start_gather_action, weapon_extra_rotation, DODGE_SPEED,
+    BTN_SPRINT, DODGE_SPEED, GATHER_RANGE, MAX_HP, MAX_STAMINA, PLAYER_HEIGHT,
+    SPRINT_STAMINA_PER_SEC, STAMINA_REGEN_PER_SEC, TICK_HZ, dodge_burst_dt, dodge_dir,
+    dummy_club_pitch, dummy_windup_ticks, integrate, loadout, merge_input_buttons,
+    predicted_busy_ticks, start_drawn_action, start_gather_action, weapon_extra_rotation,
 };
 
 use crate::camera::ControlState;
@@ -24,7 +24,12 @@ use spacetimedb_sdk::Table;
 pub struct DummyPawn;
 
 #[derive(Component)]
-pub struct DummyHpBar;
+pub struct HpBar;
+
+#[derive(Component)]
+pub struct Nameplate {
+    pub target: Entity,
+}
 
 #[derive(Component)]
 pub struct ShotPawn {
@@ -143,7 +148,6 @@ pub fn sync_dummy(
         &mut DummyPose,
         &mut MeshMaterial3d<StandardMaterial>,
     )>,
-    mut bars: Query<&mut Transform, (With<DummyHpBar>, Without<DummyPawn>)>,
 ) {
     for msg in inserts.read() {
         spawn_dummy(&mut commands, &mut meshes, &mut materials, &msg.row);
@@ -168,10 +172,6 @@ pub fn sync_dummy(
                 m.base_color = dummy_color(pose.action, pose.alive);
             }
         }
-        for mut bar in &mut bars {
-            let ratio = (msg.new.hp / MAX_HP).clamp(0.05, 1.0);
-            bar.scale.x = if msg.new.alive { ratio } else { 0.05 };
-        }
     }
     for _ in deletes.read() {
         for (e, _, _) in &dummies {
@@ -186,9 +186,131 @@ pub fn interpolate_dummy(
 ) {
     let t = (10.0 * time.delta_secs()).min(1.0);
     for (pose, mut transform) in &mut dummies {
-        let target = Vec3::new(pose.x, PLAYER_HEIGHT * 0.5, pose.z);
+        let y = if pose.alive {
+            PLAYER_HEIGHT * 0.5
+        } else {
+            0.22
+        };
+        let target = Vec3::new(pose.x, y, pose.z);
         transform.translation = transform.translation.lerp(target, t);
         transform.rotation = transform.rotation.slerp(Quat::from_rotation_y(pose.yaw), t);
+        let scale = if pose.alive {
+            Vec3::ONE
+        } else {
+            Vec3::new(1.0, 0.22, 1.0)
+        };
+        transform.scale = transform.scale.lerp(scale, t);
+    }
+}
+
+pub fn pose_hp_bars(
+    camera: Query<&GlobalTransform, With<MainCamera>>,
+    dummy: Query<(&DummyPose, &GlobalTransform), With<DummyPawn>>,
+    remotes: Query<(&ServerPose, &GlobalTransform), With<RemotePlayer>>,
+    mut bars: Query<(&ChildOf, &mut Transform), With<HpBar>>,
+) {
+    let Ok(cam) = camera.single() else {
+        return;
+    };
+    let cam_pos = cam.translation();
+    for (parent, mut tf) in &mut bars {
+        let parent_e = parent.parent();
+        let (hp, alive, parent_tf) = if let Ok((pose, g)) = dummy.get(parent_e) {
+            (pose.hp, pose.alive, *g)
+        } else if let Ok((pose, g)) = remotes.get(parent_e) {
+            (pose.hp, pose.alive, *g)
+        } else {
+            continue;
+        };
+        let cam_local = parent_tf.affine().inverse().transform_point3(cam_pos);
+        let ratio = if alive {
+            (hp / MAX_HP).clamp(0.05, 1.0)
+        } else {
+            0.05
+        };
+        *tf = Transform::from_xyz(0.0, 1.28, 0.0)
+            .looking_at(cam_local, Vec3::Y)
+            .with_scale(Vec3::new(ratio, 1.0, 1.0));
+    }
+}
+
+pub fn sync_nameplates(
+    mut commands: Commands,
+    dummy: Query<Entity, With<DummyPawn>>,
+    remotes: Query<Entity, With<RemotePlayer>>,
+    plates: Query<(Entity, &Nameplate)>,
+) {
+    let mut wanted: Vec<Entity> = dummy.iter().collect();
+    wanted.extend(remotes.iter());
+    for target in &wanted {
+        if plates.iter().any(|(_, p)| p.target == *target) {
+            continue;
+        }
+        commands.spawn((
+            Node {
+                position_type: PositionType::Absolute,
+                top: Val::Px(-40.0),
+                left: Val::Px(-40.0),
+                ..default()
+            },
+            Text::new(""),
+            TextFont::from_font_size(13.0),
+            TextColor(Color::srgb(0.95, 0.93, 0.86)),
+            TextLayout::no_wrap(),
+            Nameplate { target: *target },
+        ));
+    }
+    for (e, plate) in &plates {
+        if !wanted.contains(&plate.target) {
+            commands.entity(e).despawn();
+        }
+    }
+}
+
+pub fn update_nameplates(
+    camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
+    dummy: Query<(&DummyPose, &GlobalTransform), With<DummyPawn>>,
+    remotes: Query<(&ServerPose, &GlobalTransform), With<RemotePlayer>>,
+    mut plates: Query<(&Nameplate, &mut Node, &mut Text, &mut TextColor)>,
+) {
+    let Ok((cam, cam_tf)) = camera.single() else {
+        return;
+    };
+    for (plate, mut node, mut text, mut color) in &mut plates {
+        let (world, label, hp, alive) = if let Ok((pose, g)) = dummy.get(plate.target) {
+            (
+                g.translation() + Vec3::Y * 1.15,
+                "Dummy".to_string(),
+                pose.hp,
+                pose.alive,
+            )
+        } else if let Ok((pose, g)) = remotes.get(plate.target) {
+            (
+                g.translation() + Vec3::Y * 1.05,
+                pose.name.clone(),
+                pose.hp,
+                pose.alive,
+            )
+        } else {
+            node.top = Val::Px(-80.0);
+            continue;
+        };
+        let Ok(screen) = cam.world_to_viewport(cam_tf, world) else {
+            node.top = Val::Px(-80.0);
+            continue;
+        };
+        node.left = Val::Px(screen.x - 28.0);
+        node.top = Val::Px(screen.y - 18.0);
+        text.0 = if alive {
+            format!("{label}  {hp:.0}")
+        } else {
+            format!("{label}  down")
+        };
+        color.0 = if alive {
+            Color::srgb(0.95, 0.93, 0.86)
+        } else {
+            Color::srgb(0.55, 0.55, 0.55)
+        };
     }
 }
 
@@ -413,7 +535,10 @@ pub fn flash_hits(
                     2 => ("KILL".into(), Color::srgb(0.95, 0.35, 0.22)),
                     3 => ("BLOCK".into(), Color::srgb(0.55, 0.75, 0.95)),
                     4 => ("DODGE".into(), Color::srgb(0.75, 0.9, 0.55)),
-                    5 => (format!("+{:.0}xp", row.damage), Color::srgb(0.55, 0.85, 0.45)),
+                    5 => (
+                        format!("+{:.0}xp", row.damage),
+                        Color::srgb(0.55, 0.85, 0.45),
+                    ),
                     _ => continue,
                 };
                 commands.spawn((
@@ -562,11 +687,12 @@ pub fn pose_weapons(
             continue;
         };
         let (action, ticks, loadout) = if local_e == Some(parent.parent()) {
-            (control.pred_action, control.pred_ticks, control.pred_loadout)
-        } else if let Some((_, pose)) = remotes
-            .iter()
-            .find(|(e, _)| *e == parent.parent())
-        {
+            (
+                control.pred_action,
+                control.pred_ticks,
+                control.pred_loadout,
+            )
+        } else if let Some((_, pose)) = remotes.iter().find(|(e, _)| *e == parent.parent()) {
             (pose.action, pose.action_ticks as f32, pose.loadout)
         } else {
             continue;
@@ -577,7 +703,10 @@ pub fn pose_weapons(
     }
 }
 
-pub fn pose_dummy_club(dummies: Query<&DummyPose, With<DummyPawn>>, mut clubs: Query<(&DummyClub, &mut Transform, Option<&ChildOf>)>) {
+pub fn pose_dummy_club(
+    dummies: Query<&DummyPose, With<DummyPawn>>,
+    mut clubs: Query<(&DummyClub, &mut Transform, Option<&ChildOf>)>,
+) {
     let dummy = dummies.single().ok();
     for (club, mut transform, parent) in &mut clubs {
         let Some(_parent) = parent else {
@@ -586,7 +715,11 @@ pub fn pose_dummy_club(dummies: Query<&DummyPose, With<DummyPawn>>, mut clubs: Q
         let Some(pose) = dummy else {
             continue;
         };
-        let pitch = dummy_club_pitch(pose.action, pose.action_ticks, dummy_windup_ticks(pose.action) as f32);
+        let pitch = dummy_club_pitch(
+            pose.action,
+            pose.action_ticks,
+            dummy_windup_ticks(pose.action) as f32,
+        );
         *transform = club.rest * Transform::from_rotation(Quat::from_rotation_x(pitch));
     }
 }
@@ -631,9 +764,9 @@ pub fn refresh_remote_weapons(
     weapons: Query<(Entity, &WeaponVisual, Option<&ChildOf>)>,
 ) {
     for (entity, pose) in &remotes {
-        let current = weapons.iter().find(|(_, _vis, parent)| {
-            parent.map(|p| p.parent() == entity).unwrap_or(false)
-        });
+        let current = weapons
+            .iter()
+            .find(|(_, _vis, parent)| parent.map(|p| p.parent() == entity).unwrap_or(false));
         let mismatch = current
             .map(|(_, vis, _)| vis.loadout != pose.loadout)
             .unwrap_or(false);
@@ -780,7 +913,7 @@ fn spawn_dummy(
         .id();
     let bar = commands
         .spawn((
-            Mesh3d(meshes.add(Cuboid::new(1.0, 0.08, 0.08))),
+            Mesh3d(meshes.add(Cuboid::new(1.15, 0.12, 0.04))),
             MeshMaterial3d(materials.add(StandardMaterial {
                 base_color: Color::srgb(0.85, 0.18, 0.14),
                 unlit: true,
@@ -791,7 +924,7 @@ fn spawn_dummy(
                 1.0,
                 1.0,
             )),
-            DummyHpBar,
+            HpBar,
         ))
         .id();
     commands.entity(root).add_child(club);
