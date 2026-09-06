@@ -6,7 +6,10 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use spacetimedb_sdk::{DbContext, Identity, Table};
-use unbound_shared::{BTN_INTERACT, BTN_LIGHT, BTN_SPRINT, GATHER_RANGE, LOADOUT_SWORD, dist_xz};
+use unbound_shared::{
+    ACTION_HEAVY, ACTION_LIGHT, BTN_BLOCK, BTN_DODGE, BTN_INTERACT, BTN_LIGHT, BTN_SPRINT,
+    GATHER_RANGE, LOADOUT_SWORD, dist_xz,
+};
 
 use crate::module_bindings::*;
 
@@ -138,7 +141,7 @@ fn think(mode: Mode, conn: &DbConnection, me: &Player) -> (f32, f32, bool, u32, 
 }
 
 fn think_fight(conn: &DbConnection, me: &Player, dummy_only: bool) -> (f32, f32, bool, u32, u8) {
-    let mut target: Option<(f32, f32, f32, bool)> = None; // x, z, dist, is_player
+    let mut target: Option<(f32, f32, f32, u8)> = None; // x, z, dist, action
     if !dummy_only {
         for p in conn.db().player().iter() {
             if p.identity == me.identity || !p.alive {
@@ -146,7 +149,7 @@ fn think_fight(conn: &DbConnection, me: &Player, dummy_only: bool) -> (f32, f32,
             }
             let d = dist_xz(me.x, me.z, p.x, p.z);
             if target.map(|(_, _, td, _)| d < td).unwrap_or(true) {
-                target = Some((p.x, p.z, d, true));
+                target = Some((p.x, p.z, d, p.action));
             }
         }
     }
@@ -156,17 +159,24 @@ fn think_fight(conn: &DbConnection, me: &Player, dummy_only: bool) -> (f32, f32,
                 continue;
             }
             let dist = dist_xz(me.x, me.z, d.x, d.z);
-            target = Some((d.x, d.z, dist, false));
+            target = Some((d.x, d.z, dist, d.action));
         }
     }
-    let Some((tx, tz, dist, _is_player)) = target else {
+    let Some((tx, tz, dist, action)) = target else {
         return (me.yaw, 0.0, true, 0, LOADOUT_SWORD);
     };
     let yaw = (-(tx - me.x)).atan2(-(tz - me.z));
+    let swinging = action == ACTION_LIGHT || action == ACTION_HEAVY;
     let in_range = dist < 2.15;
-    let dir_z = if in_range { 0.0 } else { 1.0 };
+    let dir_z = if swinging || in_range { 0.0 } else { 1.0 };
     let mut buttons = 0u32;
-    if in_range {
+    if swinging && dist < 3.2 {
+        if action == ACTION_HEAVY {
+            buttons |= BTN_DODGE;
+        } else {
+            buttons |= BTN_BLOCK;
+        }
+    } else if in_range {
         buttons |= BTN_LIGHT;
     } else if dist > 6.0 {
         buttons |= BTN_SPRINT;

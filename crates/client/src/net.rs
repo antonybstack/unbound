@@ -1,8 +1,9 @@
 use bevy::prelude::*;
 use bevy_stdb::prelude::*;
 use unbound_shared::{
-    BTN_SPRINT, DODGE_SPEED, INPUT_SEND_HZ, MOVE_SPEED, PLAYER_HEIGHT, RECONCILE_SNAP,
-    SPRINT_SPEED, integrate,
+    ACTION_DEAD, ACTION_DODGE, ACTION_HIT, ACTION_NONE, BTN_SPRINT, DODGE_SPEED, INPUT_SEND_HZ,
+    MOVE_SPEED, PLAYER_HEIGHT, RECONCILE_SNAP, SPRINT_SPEED, integrate, merge_input_buttons,
+    move_lock,
 };
 
 use crate::camera::ControlState;
@@ -21,7 +22,8 @@ pub struct NetworkedIdentity {
     pub identity: spacetimedb_sdk::Identity,
 }
 
-#[derive(Component)]
+#[derive(Component, Clone, Copy)]
+#[allow(dead_code)]
 pub struct ServerPose {
     pub x: f32,
     pub z: f32,
@@ -29,11 +31,73 @@ pub struct ServerPose {
     pub drawn: bool,
     pub loadout: u8,
     pub hp: f32,
+    pub stamina: f32,
     pub alive: bool,
+    pub action: u8,
+    pub action_ticks: u8,
+}
+
+impl ServerPose {
+    pub fn from_player(player: &Player) -> Self {
+        Self {
+            x: player.x,
+            z: player.z,
+            yaw: player.yaw,
+            drawn: player.drawn,
+            loadout: player.loadout,
+            hp: player.hp,
+            stamina: player.stamina,
+            alive: player.alive,
+            action: player.action,
+            action_ticks: player.action_ticks,
+        }
+    }
+
+    pub fn apply_row(&mut self, player: &Player) {
+        *self = Self::from_player(player);
+    }
 }
 
 pub fn connect(mut cmds: StdbCmds) {
     cmds.connect(StdbConnectOptions::default());
+}
+
+pub fn bind_local_player(
+    mut commands: Commands,
+    conn: Option<Res<StdbConn>>,
+    mut local: Query<(Entity, &mut Transform, Option<&NetworkedIdentity>), With<LocalPlayer>>,
+    mut control: ResMut<ControlState>,
+) {
+    let Some(conn) = conn else {
+        return;
+    };
+    let Some(me) = conn.try_identity() else {
+        return;
+    };
+    let Ok((entity, mut transform, net)) = local.single_mut() else {
+        return;
+    };
+    let Some(player) = conn.db().player().iter().find(|p| p.identity == me) else {
+        return;
+    };
+    if net.is_some() {
+        return;
+    }
+    transform.translation.x = player.x;
+    transform.translation.z = player.z;
+    transform.translation.y = PLAYER_HEIGHT * 0.5;
+    transform.rotation = Quat::from_rotation_y(player.yaw);
+    control.yaw = player.yaw;
+    control.pred_stamina = player.stamina;
+    control.pred_action = player.action;
+    control.pred_ticks = player.action_ticks as f32;
+    control.pred_loadout = player.loadout;
+    commands.entity(entity).insert((
+        NetworkedIdentity {
+            identity: player.identity,
+        },
+        ServerPose::from_player(&player),
+    ));
 }
 
 pub fn spawn_pawns_from_cache(
@@ -88,27 +152,35 @@ pub fn apply_player_updates(
         Option<&LocalPlayer>,
         &mut Transform,
     )>,
+    mut control: ResMut<ControlState>,
 ) {
     for msg in updates.read() {
         for (id, mut pose, local, mut transform) in &mut players {
             if id.identity != msg.new.identity {
                 continue;
             }
-            pose.x = msg.new.x;
-            pose.z = msg.new.z;
-            pose.yaw = msg.new.yaw;
-            pose.drawn = msg.new.drawn;
-            pose.loadout = msg.new.loadout;
-            pose.hp = msg.new.hp;
-            pose.alive = msg.new.alive;
+            pose.apply_row(&msg.new);
             if local.is_some() {
                 // Keep prediction authoritative unless we have clearly desynced.
                 // Blending toward a delayed snapshot every tick makes WASD feel sticky.
                 let predicted = Vec3::new(transform.translation.x, 0.0, transform.translation.z);
                 let server = Vec3::new(msg.new.x, 0.0, msg.new.z);
-                if predicted.distance(server) > RECONCILE_SNAP {
+                let dead = !msg.new.alive || msg.new.action == ACTION_DEAD;
+                if dead || predicted.distance(server) > RECONCILE_SNAP {
                     transform.translation.x = msg.new.x;
                     transform.translation.z = msg.new.z;
+                }
+                if msg.new.action == ACTION_HIT || msg.new.action == ACTION_DEAD {
+                    control.pred_action = msg.new.action;
+                    control.pred_ticks = msg.new.action_ticks as f32;
+                } else if msg.new.action == ACTION_NONE
+                    && (control.pred_action == ACTION_HIT || control.pred_action == ACTION_DEAD)
+                {
+                    control.pred_action = ACTION_NONE;
+                    control.pred_ticks = 0.0;
+                }
+                if control.pred_action == ACTION_NONE || msg.new.stamina < control.pred_stamina {
+                    control.pred_stamina = msg.new.stamina;
                 }
             }
         }
@@ -118,11 +190,11 @@ pub fn apply_player_updates(
 pub fn apply_player_deletes(
     mut commands: Commands,
     mut deletes: ReadDeleteMessage<Player>,
-    players: Query<(Entity, &NetworkedIdentity)>,
+    players: Query<(Entity, &NetworkedIdentity, Option<&LocalPlayer>)>,
 ) {
     for msg in deletes.read() {
-        for (entity, id) in &players {
-            if id.identity == msg.row.identity {
+        for (entity, id, local) in &players {
+            if id.identity == msg.row.identity && local.is_none() {
                 commands.entity(entity).despawn();
             }
         }
@@ -135,9 +207,20 @@ pub fn interpolate_remotes(
 ) {
     let t = (10.0 * time.delta_secs()).min(1.0);
     for (pose, mut transform) in &mut remotes {
-        let target = Vec3::new(pose.x, PLAYER_HEIGHT * 0.5, pose.z);
+        let y = if pose.alive {
+            PLAYER_HEIGHT * 0.5
+        } else {
+            0.22
+        };
+        let target = Vec3::new(pose.x, y, pose.z);
         transform.translation = transform.translation.lerp(target, t);
         transform.rotation = transform.rotation.slerp(Quat::from_rotation_y(pose.yaw), t);
+        let scale = if pose.alive {
+            Vec3::ONE
+        } else {
+            Vec3::new(1.0, 0.22, 1.0)
+        };
+        transform.scale = transform.scale.lerp(scale, t);
     }
 }
 
@@ -149,9 +232,14 @@ pub fn predict_local(
     let Ok(mut transform) = local.single_mut() else {
         return;
     };
-    let speed = if (control.buttons & unbound_shared::BTN_DODGE) != 0 {
+    if move_lock(control.pred_action) {
+        transform.translation.y = PLAYER_HEIGHT * 0.5;
+        transform.rotation = Quat::from_rotation_y(control.yaw);
+        return;
+    }
+    let speed = if control.pred_action == ACTION_DODGE {
         DODGE_SPEED
-    } else if (control.buttons & BTN_SPRINT) != 0 {
+    } else if (control.buttons & BTN_SPRINT) != 0 && control.pred_stamina > 1.0 {
         SPRINT_SPEED
     } else {
         MOVE_SPEED
@@ -177,20 +265,24 @@ pub fn send_input(time: Res<Time>, mut control: ResMut<ControlState>, conn: Opti
     };
     control.send_accum += time.delta_secs();
     let interval = 1.0 / INPUT_SEND_HZ;
-    if control.send_accum < interval {
+    let flush = control.latched != 0 || control.send_accum >= interval;
+    if !flush {
         return;
     }
     control.send_accum = 0.0;
+    let buttons = merge_input_buttons(control.buttons, control.latched);
     if let Err(err) = conn.reducers().set_input(
         control.dir_x,
         control.dir_z,
         control.yaw,
         control.drawn,
-        control.buttons,
+        buttons,
         control.loadout,
     ) {
         warn!("set_input failed: {err}");
+        return;
     }
+    control.latched = 0;
 }
 
 fn spawn_pawn(
@@ -217,15 +309,7 @@ fn spawn_pawn(
         NetworkedIdentity {
             identity: player.identity,
         },
-        ServerPose {
-            x: player.x,
-            z: player.z,
-            yaw: player.yaw,
-            drawn: player.drawn,
-            loadout: player.loadout,
-            hp: player.hp,
-            alive: player.alive,
-        },
+        ServerPose::from_player(player),
     ));
     if is_local {
         entity.insert(LocalPlayer);

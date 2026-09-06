@@ -1,6 +1,7 @@
 use crate::{
     ACTION_BLOCK, ACTION_DEAD, ACTION_DODGE, ACTION_GATHER, ACTION_HEAVY, ACTION_HIT, ACTION_LIGHT,
-    ACTION_SWAP, LOADOUT_BOW, LOADOUT_STAFF, LOADOUT_SWORD, TICK_HZ,
+    ACTION_SWAP, BTN_BLOCK, BTN_DODGE, BTN_HEAVY, BTN_INTERACT, BTN_LIGHT, LOADOUT_BOW, LOADOUT_STAFF,
+    LOADOUT_SWORD, TICK_DT, TICK_HZ,
 };
 
 #[derive(Clone, Copy, Debug)]
@@ -135,4 +136,220 @@ pub fn blocking(action: u8) -> bool {
 
 pub fn invulnerable(action: u8) -> bool {
     action == ACTION_DODGE
+}
+
+/// Buttons that are meaningful as a 1-frame press and must be latched until `set_input`.
+pub const BTN_EDGE: u32 = BTN_LIGHT | BTN_HEAVY | BTN_DODGE | BTN_INTERACT;
+
+pub const DUMMY_AGGRO_RANGE: f32 = 12.0;
+pub const DUMMY_LEASH_RANGE: f32 = 14.0;
+pub const DUMMY_STRIKE_RANGE: f32 = 2.55;
+pub const DUMMY_MELEE_RANGE: f32 = 2.2;
+pub const DUMMY_CHASE_SPEED: f32 = 3.2;
+pub const DUMMY_HOME_SPEED: f32 = 3.6;
+pub const DUMMY_LIGHT_DAMAGE: f32 = 11.0;
+pub const DUMMY_HEAVY_DAMAGE: f32 = 20.0;
+
+pub fn dummy_light_windup() -> u8 {
+    12
+}
+
+pub fn dummy_heavy_windup() -> u8 {
+    18
+}
+
+pub fn dummy_cooldown_ticks() -> u8 {
+    22
+}
+
+pub fn dummy_windup_ticks(action: u8) -> u8 {
+    if action == ACTION_HEAVY {
+        dummy_heavy_windup()
+    } else {
+        dummy_light_windup()
+    }
+}
+
+pub fn merge_input_buttons(held: u32, latched: u32) -> u32 {
+    held | latched
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ActionStart {
+    pub action: u8,
+    pub ticks: u8,
+    pub stamina: f32,
+    pub pending_hit: bool,
+    pub loadout: u8,
+}
+
+/// Same rules the module uses to start a drawn-weapon action.
+pub fn start_drawn_action(
+    current_action: u8,
+    current_loadout: u8,
+    wanted_loadout: u8,
+    stamina: f32,
+    buttons: u32,
+) -> Option<ActionStart> {
+    if action_busy(current_action) {
+        return None;
+    }
+    if wanted_loadout != current_loadout {
+        return Some(ActionStart {
+            action: ACTION_SWAP,
+            ticks: swap_ticks(),
+            stamina,
+            pending_hit: false,
+            loadout: wanted_loadout,
+        });
+    }
+    if (buttons & BTN_DODGE) != 0 {
+        let cost = loadout(current_loadout).dodge_stamina;
+        if stamina_ok(stamina, cost) {
+            return Some(ActionStart {
+                action: ACTION_DODGE,
+                ticks: dodge_ticks(),
+                stamina: stamina - cost,
+                pending_hit: false,
+                loadout: current_loadout,
+            });
+        }
+        return None;
+    }
+    if (buttons & BTN_BLOCK) != 0 && current_loadout == LOADOUT_SWORD {
+        return Some(ActionStart {
+            action: ACTION_BLOCK,
+            ticks: 1,
+            stamina,
+            pending_hit: false,
+            loadout: current_loadout,
+        });
+    }
+    let def = loadout(current_loadout);
+    if (buttons & BTN_HEAVY) != 0 && stamina_ok(stamina, def.heavy_stamina) {
+        return Some(ActionStart {
+            action: ACTION_HEAVY,
+            ticks: def.heavy_windup_ticks,
+            stamina: stamina - def.heavy_stamina,
+            pending_hit: true,
+            loadout: current_loadout,
+        });
+    }
+    if (buttons & BTN_LIGHT) != 0 && stamina_ok(stamina, def.light_stamina) {
+        return Some(ActionStart {
+            action: ACTION_LIGHT,
+            ticks: def.light_windup_ticks,
+            stamina: stamina - def.light_stamina,
+            pending_hit: true,
+            loadout: current_loadout,
+        });
+    }
+    None
+}
+
+pub fn start_gather_action(current_action: u8, buttons: u32, in_range: bool) -> Option<ActionStart> {
+    if action_busy(current_action) {
+        return None;
+    }
+    if (buttons & BTN_INTERACT) == 0 || !in_range {
+        return None;
+    }
+    Some(ActionStart {
+        action: ACTION_GATHER,
+        ticks: gather_ticks(),
+        stamina: 0.0,
+        pending_hit: false,
+        loadout: 0,
+    })
+}
+
+pub fn dodge_dir(dir_x: f32, dir_z: f32) -> (f32, f32) {
+    if dir_x.abs() + dir_z.abs() < 0.1 {
+        (0.0, 1.0)
+    } else {
+        (dir_x, dir_z)
+    }
+}
+
+pub fn dodge_burst_dt() -> f32 {
+    TICK_DT * dodge_ticks() as f32 * 0.35
+}
+
+/// Client-side busy window: attacks include recover so the chop plays through.
+pub fn predicted_busy_ticks(start: &ActionStart) -> u8 {
+    let def = loadout(start.loadout);
+    match start.action {
+        ACTION_LIGHT => start.ticks.saturating_add(def.light_recover_ticks),
+        ACTION_HEAVY => start.ticks.saturating_add(def.heavy_recover_ticks),
+        _ => start.ticks,
+    }
+}
+
+/// 0 at windup start, 1 at impact, >1 through recover.
+pub fn swing_progress(action: u8, ticks_left: f32, loadout_id: u8) -> f32 {
+    let def = loadout(loadout_id);
+    let (windup, recover) = match action {
+        ACTION_HEAVY => (def.heavy_windup_ticks as f32, def.heavy_recover_ticks as f32),
+        ACTION_LIGHT => (def.light_windup_ticks as f32, def.light_recover_ticks as f32),
+        _ => return 0.0,
+    };
+    let total = windup + recover;
+    if total <= 1e-3 {
+        return 1.0;
+    }
+    (total - ticks_left.max(0.0)) / windup.max(1.0)
+}
+
+pub fn weapon_extra_rotation(action: u8, ticks_left: f32, loadout_id: u8) -> (f32, f32, f32) {
+    match action {
+        ACTION_BLOCK => (0.85, 0.15, -0.9),
+        ACTION_DODGE => (0.35, 0.0, 0.4),
+        ACTION_SWAP => (-0.45, 0.2, 0.0),
+        ACTION_HIT => (0.55, 0.0, 0.2),
+        ACTION_GATHER => (0.4, 0.0, 0.15),
+        ACTION_LIGHT | ACTION_HEAVY => {
+            let p = swing_progress(action, ticks_left, loadout_id);
+            if p < 1.0 {
+                (-0.2 - p * 0.95, 0.0, p * 0.25)
+            } else {
+                let rec = (p - 1.0).clamp(0.0, 1.2);
+                (-1.15 + rec * 1.85, 0.0, 0.25 + rec * 0.35)
+            }
+        }
+        _ => (0.0, 0.0, 0.0),
+    }
+}
+
+/// Dummy club pitch. Raises through most of the windup, slams in the last 30%.
+pub fn dummy_club_pitch(action: u8, ticks_left: f32, windup_ticks: f32) -> f32 {
+    if action == ACTION_HIT {
+        return 0.4;
+    }
+    if action != ACTION_LIGHT && action != ACTION_HEAVY {
+        return 0.0;
+    }
+    let t = if windup_ticks > 1e-3 {
+        (1.0 - ticks_left / windup_ticks).clamp(0.0, 1.0)
+    } else {
+        1.0
+    };
+    if t < 0.7 {
+        -(t / 0.7) * 1.25
+    } else {
+        -1.25 + ((t - 0.7) / 0.3) * 2.2
+    }
+}
+
+pub fn action_label(action: u8) -> &'static str {
+    match action {
+        ACTION_LIGHT => "LIGHT",
+        ACTION_HEAVY => "HEAVY",
+        ACTION_DODGE => "DODGE",
+        ACTION_BLOCK => "BLOCK",
+        ACTION_SWAP => "SWAP",
+        ACTION_HIT => "HIT",
+        ACTION_DEAD => "DEAD",
+        ACTION_GATHER => "GATHER",
+        _ => "",
+    }
 }

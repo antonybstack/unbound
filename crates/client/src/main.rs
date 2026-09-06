@@ -6,14 +6,16 @@ mod net;
 use bevy::prelude::*;
 use bevy_stdb::prelude::*;
 use unbound_shared::{
-    BTN_BLOCK, BTN_DODGE, BTN_HEAVY, BTN_INTERACT, BTN_LIGHT, BTN_SPRINT, GATHER_RANGE, MAX_HP,
-    MAX_STAMINA, PLAYER_HEIGHT, loadout,
+    BTN_BLOCK, BTN_DODGE, BTN_HEAVY, BTN_INTERACT, BTN_LIGHT, BTN_SPRINT, GATHER_RANGE,
+    MAX_HP, MAX_STAMINA, PLAYER_HEIGHT, action_label, loadout,
 };
 
 use crate::camera::{ControlState, update_camera, update_cursor};
 use crate::combat::{
-    DummyPawn, LocalVitals, WeaponState, flash_hits, refresh_remote_weapons, refresh_weapon,
-    subscribe_world, sync_dummy, sync_nodes, sync_projectiles, sync_vitals,
+    DummyPawn, HitFlash, LocalVitals, WeaponState, apply_predicted_starts, flash_hits,
+    interpolate_dummy, pose_dummy_club, pose_weapons, refresh_remote_weapons, refresh_weapon,
+    subscribe_world, sync_dummy, sync_nodes, sync_projectiles, sync_vitals, tick_dummy_pose,
+    tick_hit_flash, tick_prediction, update_floaters,
 };
 use crate::module_bindings::{
     CharacterTableAccessor, CombatEventTableAccessor, DbConnection, DummyTableAccessor,
@@ -21,7 +23,8 @@ use crate::module_bindings::{
 };
 use crate::net::{
     LocalPlayer, RemotePlayer, apply_player_deletes, apply_player_inserts, apply_player_updates,
-    connect, interpolate_remotes, predict_local, send_input, spawn_pawns_from_cache,
+    bind_local_player, connect, interpolate_remotes, predict_local, send_input,
+    spawn_pawns_from_cache,
 };
 
 pub type StdbConn = StdbConnection<DbConnection>;
@@ -81,30 +84,46 @@ fn main() {
         .insert_resource(ControlState::default())
         .insert_resource(LocalVitals::default())
         .insert_resource(WeaponState::default())
+        .insert_resource(HitFlash::default())
         .add_systems(Startup, (setup_scene, connect, setup_hud))
         .add_systems(
             Update,
             (
-                subscribe_world,
-                spawn_pawns_from_cache,
-                apply_player_inserts,
-                apply_player_updates,
-                apply_player_deletes,
-                interpolate_remotes,
-                sync_dummy,
-                sync_projectiles,
-                sync_nodes,
-                sync_vitals,
-                flash_hits,
-                read_combat_input,
-                predict_local,
-                send_input,
-                refresh_weapon,
-                refresh_remote_weapons,
-                update_cursor,
-                update_camera,
-                update_hud,
-                update_crosshair,
+                (
+                    subscribe_world,
+                    spawn_pawns_from_cache,
+                    bind_local_player,
+                    apply_player_inserts,
+                    apply_player_updates,
+                    apply_player_deletes,
+                    interpolate_remotes,
+                    sync_dummy,
+                    tick_dummy_pose,
+                    interpolate_dummy,
+                    sync_projectiles,
+                    sync_nodes,
+                    sync_vitals,
+                    flash_hits,
+                    update_floaters,
+                )
+                    .chain(),
+                (
+                    tick_hit_flash,
+                    read_combat_input,
+                    apply_predicted_starts,
+                    tick_prediction,
+                    predict_local,
+                    send_input,
+                    refresh_weapon,
+                    refresh_remote_weapons,
+                    pose_weapons,
+                    pose_dummy_club,
+                    update_cursor,
+                    update_camera,
+                    update_hud,
+                    update_crosshair,
+                )
+                    .chain(),
             )
                 .chain(),
         )
@@ -367,11 +386,20 @@ fn read_combat_input(
         if mouse.pressed(MouseButton::Left) {
             buttons |= BTN_LIGHT;
         }
+        if mouse.just_pressed(MouseButton::Left) {
+            control.latched |= BTN_LIGHT;
+        }
         if mouse.pressed(MouseButton::Right) {
             buttons |= BTN_HEAVY;
         }
+        if mouse.just_pressed(MouseButton::Right) {
+            control.latched |= BTN_HEAVY;
+        }
         if keys.pressed(KeyCode::Space) {
             buttons |= BTN_DODGE;
+        }
+        if keys.just_pressed(KeyCode::Space) {
+            control.latched |= BTN_DODGE;
         }
         if mouse.pressed(MouseButton::Middle) || keys.pressed(KeyCode::KeyQ) {
             buttons |= BTN_BLOCK;
@@ -379,6 +407,9 @@ fn read_combat_input(
     }
     if keys.pressed(KeyCode::KeyE) {
         buttons |= BTN_INTERACT;
+    }
+    if keys.just_pressed(KeyCode::KeyE) {
+        control.latched |= BTN_INTERACT;
     }
     if keys.pressed(KeyCode::ShiftLeft) || keys.pressed(KeyCode::ShiftRight) {
         buttons |= BTN_SPRINT;
@@ -397,23 +428,24 @@ fn update_hud(
         Query<&mut Node, With<DummyHpFill>>,
     )>,
 ) {
-    let stance = if !vitals.alive {
+    let stance = if !vitals.alive || control.pred_action == unbound_shared::ACTION_DEAD {
         "DEAD"
     } else if control.drawn {
         "DRAWN"
     } else {
         "SHEATHED"
     };
+    let act = action_label(control.pred_action);
     let def = loadout(control.loadout);
     let hp = if vitals.hp == 0.0 && vitals.name.is_empty() {
         MAX_HP
     } else {
         vitals.hp
     };
-    let stam = if vitals.stamina == 0.0 && vitals.name.is_empty() {
+    let stam = if vitals.name.is_empty() && control.pred_stamina <= 0.0 {
         MAX_STAMINA
     } else {
-        vitals.stamina
+        control.pred_stamina
     };
     let name = if vitals.name.is_empty() {
         "online"
@@ -422,9 +454,14 @@ fn update_hud(
     };
     if let Ok(mut text) = title.single_mut() {
         text.0 = format!(
-            "UNBOUND  {stance}  {}  [{name}]  lock {}",
+            "UNBOUND  {stance}  {}  [{name}]  lock {}{}",
             def.name,
             if control.lock_on { "ON" } else { "off" },
+            if act.is_empty() {
+                String::new()
+            } else {
+                format!("  {act}")
+            },
         );
     }
     if let Ok(mut fill) = bars.p0().single_mut() {

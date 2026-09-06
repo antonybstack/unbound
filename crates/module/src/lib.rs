@@ -2,15 +2,18 @@ use std::time::Duration;
 
 use spacetimedb::{table, Identity, ReducerContext, ScheduleAt, Table};
 use unbound_shared::{
-    action_busy, blocking, dist_xz, dodge_ticks, facing_dot, gather_ticks, hitstun_ticks,
-    integrate, invulnerable, knockback, loadout, move_lock, node_respawn_ticks, node_xp, push_apart,
-    scaled_damage, skill_for_loadout, skill_level, stamina_ok, swap_ticks, yaw_forward, ACTION_BLOCK,
-    ACTION_DEAD, ACTION_DODGE, ACTION_GATHER, ACTION_HEAVY, ACTION_HIT, ACTION_LIGHT, ACTION_NONE,
-    ACTION_SWAP, BODY_SEPARATION, BTN_BLOCK, BTN_DODGE, BTN_HEAVY, BTN_INTERACT, BTN_LIGHT, BTN_SPRINT,
-    DODGE_SPEED, GATHER_RANGE, HP_REGEN_PER_SEC, KNOCKBACK_HEAVY, KNOCKBACK_LIGHT, LOADOUT_SWORD,
-    MAX_HP, MAX_STAMINA, MOVE_SPEED, NODE_ORE, NODE_WOOD, PLAYER_RADIUS, SKILL_DEFENCE, SKILL_GATHERING,
-    SKILL_HITPOINTS, SKILL_MAGIC, SKILL_MELEE, SKILL_RANGED, SPRINT_SPEED, SPRINT_STAMINA_PER_SEC,
-    STAMINA_REGEN_PER_SEC, TICK_DT, WORLD_HALF,
+    action_busy, blocking, dist_xz, dodge_burst_dt, dodge_dir, dummy_cooldown_ticks,
+    dummy_heavy_windup, dummy_light_windup, facing_dot, hitstun_ticks, integrate, invulnerable,
+    knockback, loadout, move_lock, node_respawn_ticks, node_xp, push_apart, scaled_damage,
+    skill_for_loadout, skill_level, start_drawn_action, start_gather_action, yaw_forward,
+    ACTION_BLOCK, ACTION_DEAD, ACTION_DODGE, ACTION_GATHER, ACTION_HEAVY, ACTION_HIT, ACTION_LIGHT,
+    ACTION_NONE, BODY_SEPARATION, BTN_BLOCK, BTN_SPRINT, DODGE_SPEED,
+    DUMMY_AGGRO_RANGE, DUMMY_CHASE_SPEED, DUMMY_HEAVY_DAMAGE, DUMMY_HOME_SPEED, DUMMY_LEASH_RANGE,
+    DUMMY_LIGHT_DAMAGE, DUMMY_MELEE_RANGE, DUMMY_STRIKE_RANGE, GATHER_RANGE, HP_REGEN_PER_SEC,
+    KNOCKBACK_HEAVY, KNOCKBACK_LIGHT, LOADOUT_SWORD, MAX_HP, MAX_STAMINA, MOVE_SPEED, NODE_ORE,
+    NODE_WOOD, PLAYER_RADIUS, SKILL_DEFENCE, SKILL_GATHERING, SKILL_HITPOINTS, SKILL_MAGIC,
+    SKILL_MELEE, SKILL_RANGED, SPRINT_SPEED, SPRINT_STAMINA_PER_SEC, STAMINA_REGEN_PER_SEC, TICK_DT,
+    WORLD_HALF,
 };
 
 #[table(accessor = player, public)]
@@ -394,75 +397,45 @@ fn tick_players(ctx: &ReducerContext) {
     }
 }
 
-fn try_start_player_action(ctx: &ReducerContext, player: &mut Player, input: &PlayerInput) {
-    if input.loadout != player.loadout {
-        player.loadout = input.loadout;
-        player.action = ACTION_SWAP;
-        player.action_ticks = swap_ticks();
-        player.pending_hit = false;
+fn try_start_player_action(_ctx: &ReducerContext, player: &mut Player, input: &PlayerInput) {
+    let Some(start) = start_drawn_action(
+        player.action,
+        player.loadout,
+        input.loadout,
+        player.stamina,
+        input.buttons,
+    ) else {
         return;
+    };
+    player.loadout = start.loadout;
+    player.action = start.action;
+    player.action_ticks = start.ticks;
+    player.stamina = start.stamina;
+    player.pending_hit = start.pending_hit;
+    if start.action == ACTION_DODGE {
+        let (dx, dz) = dodge_dir(input.dir_x, input.dir_z);
+        let (x, z) = integrate(
+            player.x,
+            player.z,
+            input.yaw,
+            dx,
+            dz,
+            dodge_burst_dt(),
+            DODGE_SPEED,
+        );
+        player.x = x;
+        player.z = z;
     }
-    if (input.buttons & BTN_DODGE) != 0 {
-        let cost = loadout(player.loadout).dodge_stamina;
-        if stamina_ok(player.stamina, cost) {
-            player.stamina -= cost;
-            player.action = ACTION_DODGE;
-            player.action_ticks = dodge_ticks();
-            player.pending_hit = false;
-            let (x, z) = integrate(
-                player.x,
-                player.z,
-                input.yaw,
-                if input.dir_x.abs() + input.dir_z.abs() < 0.1 {
-                    0.0
-                } else {
-                    input.dir_x
-                },
-                if input.dir_x.abs() + input.dir_z.abs() < 0.1 {
-                    1.0
-                } else {
-                    input.dir_z
-                },
-                TICK_DT * dodge_ticks() as f32 * 0.35,
-                DODGE_SPEED,
-            );
-            player.x = x;
-            player.z = z;
-        }
-        return;
-    }
-    if (input.buttons & BTN_BLOCK) != 0 && player.loadout == LOADOUT_SWORD {
-        player.action = ACTION_BLOCK;
-        player.action_ticks = 1;
-        return;
-    }
-    let def = loadout(player.loadout);
-    if (input.buttons & BTN_HEAVY) != 0 && stamina_ok(player.stamina, def.heavy_stamina) {
-        player.stamina -= def.heavy_stamina;
-        player.action = ACTION_HEAVY;
-        player.action_ticks = def.heavy_windup_ticks;
-        player.pending_hit = true;
-        return;
-    }
-    if (input.buttons & BTN_LIGHT) != 0 && stamina_ok(player.stamina, def.light_stamina) {
-        player.stamina -= def.light_stamina;
-        player.action = ACTION_LIGHT;
-        player.action_ticks = def.light_windup_ticks;
-        player.pending_hit = true;
-    }
-    let _ = ctx;
 }
 
 fn try_start_gather(player: &mut Player, input: &PlayerInput, ctx: &ReducerContext) {
-    if (input.buttons & BTN_INTERACT) == 0 {
+    let in_range = nearest_node_range(ctx, player.x, player.z) <= GATHER_RANGE;
+    let Some(start) = start_gather_action(player.action, input.buttons, in_range) else {
         return;
-    }
-    if nearest_node_range(ctx, player.x, player.z) > GATHER_RANGE {
-        return;
-    }
-    player.action = ACTION_GATHER;
-    player.action_ticks = gather_ticks();
-    player.pending_hit = false;
+    };
+    player.action = start.action;
+    player.action_ticks = start.ticks;
+    player.pending_hit = start.pending_hit;
 }
 
 fn resolve_gather(ctx: &ReducerContext, player: &Player) {
@@ -585,22 +558,31 @@ fn tick_dummy(ctx: &ReducerContext) {
         dummy.action_ticks -= 1;
     }
     if dummy.pending_hit && dummy.action_ticks == 0 {
+        let heavy = dummy.action == ACTION_HEAVY;
         melee_strike(
             ctx,
             dummy.x,
             dummy.z,
             dummy.yaw,
-            2.2,
-            11.0,
+            DUMMY_MELEE_RANGE,
+            if heavy {
+                DUMMY_HEAVY_DAMAGE
+            } else {
+                DUMMY_LIGHT_DAMAGE
+            },
             true,
             Identity::from_byte_array([0; 32]),
             dummy.id,
             SKILL_MELEE,
-            KNOCKBACK_LIGHT,
+            if heavy {
+                KNOCKBACK_HEAVY
+            } else {
+                KNOCKBACK_LIGHT
+            },
         );
         dummy.pending_hit = false;
         dummy.action = ACTION_NONE;
-        dummy.cooldown = 24;
+        dummy.cooldown = dummy_cooldown_ticks();
     }
     if dummy.cooldown > 0 {
         dummy.cooldown -= 1;
@@ -620,27 +602,57 @@ fn tick_dummy(ctx: &ReducerContext) {
     let home_d = dist_xz(dummy.x, dummy.z, DUMMY_HOME_X, DUMMY_HOME_Z);
     if let Some((d, _px, _pz, yaw)) = nearest {
         dummy.yaw = yaw;
-        let chase = d < 12.0 && home_d < 14.0;
+        let chase = d < DUMMY_AGGRO_RANGE && home_d < DUMMY_LEASH_RANGE;
         if chase && d > 2.05 && dummy.action_ticks == 0 {
-            let (x, z) = integrate(dummy.x, dummy.z, dummy.yaw, 0.0, 1.0, TICK_DT, 3.2);
+            let (x, z) = integrate(
+                dummy.x,
+                dummy.z,
+                dummy.yaw,
+                0.0,
+                1.0,
+                TICK_DT,
+                DUMMY_CHASE_SPEED,
+            );
             dummy.x = x;
             dummy.z = z;
         } else if !chase && home_d > 0.6 && dummy.action_ticks == 0 {
             let yaw_home = (-(DUMMY_HOME_X - dummy.x)).atan2(-(DUMMY_HOME_Z - dummy.z));
             dummy.yaw = yaw_home;
-            let (x, z) = integrate(dummy.x, dummy.z, dummy.yaw, 0.0, 1.0, TICK_DT, 3.6);
+            let (x, z) = integrate(
+                dummy.x,
+                dummy.z,
+                dummy.yaw,
+                0.0,
+                1.0,
+                TICK_DT,
+                DUMMY_HOME_SPEED,
+            );
             dummy.x = x;
             dummy.z = z;
         }
-        if chase && d < 2.55 && dummy.cooldown == 0 && dummy.action_ticks == 0 {
-            dummy.action = ACTION_LIGHT;
-            dummy.action_ticks = 9;
+        if chase && d < DUMMY_STRIKE_RANGE && dummy.cooldown == 0 && dummy.action_ticks == 0 {
+            // Hurt dummy commits to a longer, heavier swing so the telegraph reads.
+            let heavy = dummy.hp < 70.0;
+            dummy.action = if heavy { ACTION_HEAVY } else { ACTION_LIGHT };
+            dummy.action_ticks = if heavy {
+                dummy_heavy_windup()
+            } else {
+                dummy_light_windup()
+            };
             dummy.pending_hit = true;
         }
     } else if home_d > 0.6 && dummy.action_ticks == 0 {
         let yaw_home = (-(DUMMY_HOME_X - dummy.x)).atan2(-(DUMMY_HOME_Z - dummy.z));
         dummy.yaw = yaw_home;
-        let (x, z) = integrate(dummy.x, dummy.z, dummy.yaw, 0.0, 1.0, TICK_DT, 3.6);
+        let (x, z) = integrate(
+            dummy.x,
+            dummy.z,
+            dummy.yaw,
+            0.0,
+            1.0,
+            TICK_DT,
+            DUMMY_HOME_SPEED,
+        );
         dummy.x = x;
         dummy.z = z;
     }

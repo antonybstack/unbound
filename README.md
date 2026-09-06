@@ -4,7 +4,7 @@ Browser-first persistent action RPG: **Bevy** client, **SpacetimeDB** backend, *
 
 Sheathe and you are in WoW. Draw and you are in Elden Ring. Your bag is your class.
 
-**MVP (slices 0–3) is playable.** Predicted WASD, three loadouts, a training dummy, 1v1 PvP, and a `character` row that keeps XP after you leave the yard.
+**MVP (slices 0–3) is playable.** Predicted WASD and swing start, three loadouts, a dummy with a readable windup, 1v1 PvP, and a `character` row that keeps XP after you leave the yard.
 
 Vision, inspirations, stack, and slice plan: **[docs/VISION.md](docs/VISION.md)**.
 

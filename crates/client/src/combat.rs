@@ -1,7 +1,14 @@
 use bevy::prelude::*;
 use bevy_stdb::prelude::*;
-use unbound_shared::{ACTION_HEAVY, ACTION_HIT, ACTION_LIGHT, MAX_HP, PLAYER_HEIGHT, loadout};
+use unbound_shared::{
+    ACTION_BLOCK, ACTION_DODGE, ACTION_HEAVY, ACTION_HIT, ACTION_LIGHT, ACTION_NONE, BTN_BLOCK,
+    BTN_SPRINT, GATHER_RANGE, MAX_HP, MAX_STAMINA, PLAYER_HEIGHT, SPRINT_STAMINA_PER_SEC,
+    STAMINA_REGEN_PER_SEC, TICK_HZ, dodge_burst_dt, dodge_dir, dummy_club_pitch, dummy_windup_ticks,
+    integrate, loadout, merge_input_buttons, predicted_busy_ticks, start_drawn_action,
+    start_gather_action, weapon_extra_rotation, DODGE_SPEED,
+};
 
+use crate::camera::ControlState;
 use crate::module_bindings::{
     Character, CharacterTableAccess, CombatEvent, Dummy, DummyTableAccess, GatherNode,
     GatherNodeTableAccess, Player, PlayerTableAccess, Projectile, ProjectileTableAccess,
@@ -10,7 +17,7 @@ use crate::module_bindings::{
     player_table::playerQueryTableAccess, projectile_table::projectileQueryTableAccess,
 };
 use crate::net::{LocalPlayer, RemotePlayer, ServerPose};
-use crate::{StdbConn, StdbSubs, SubKey};
+use crate::{MainCamera, StdbConn, StdbSubs, SubKey};
 use spacetimedb_sdk::Table;
 
 #[derive(Component)]
@@ -25,7 +32,36 @@ pub struct ShotPawn {
 }
 
 #[derive(Component)]
-pub struct WeaponVisual;
+pub struct WeaponVisual {
+    pub loadout: u8,
+    pub rest: Transform,
+}
+
+#[derive(Component)]
+pub struct DummyClub {
+    pub rest: Transform,
+}
+
+#[derive(Component)]
+pub struct DummyPose {
+    pub x: f32,
+    pub z: f32,
+    pub yaw: f32,
+    pub action: u8,
+    pub action_ticks: f32,
+    pub hp: f32,
+    pub alive: bool,
+}
+
+#[derive(Resource, Default)]
+pub struct HitFlash {
+    pub t: f32,
+}
+
+#[derive(Component)]
+pub struct DamageFloater {
+    pub age: f32,
+}
 
 #[derive(Component)]
 pub struct NodePawn {
@@ -102,14 +138,11 @@ pub fn sync_dummy(
     mut updates: ReadUpdateMessage<Dummy>,
     mut deletes: ReadDeleteMessage<Dummy>,
     conn: Option<Res<StdbConn>>,
-    mut dummies: Query<
-        (
-            Entity,
-            &mut Transform,
-            &mut MeshMaterial3d<StandardMaterial>,
-        ),
-        With<DummyPawn>,
-    >,
+    mut dummies: Query<(
+        Entity,
+        &mut DummyPose,
+        &mut MeshMaterial3d<StandardMaterial>,
+    )>,
     mut bars: Query<&mut Transform, (With<DummyHpBar>, Without<DummyPawn>)>,
 ) {
     for msg in inserts.read() {
@@ -123,12 +156,16 @@ pub fn sync_dummy(
         }
     }
     for msg in updates.read() {
-        for (_e, mut transform, mat) in &mut dummies {
-            transform.translation = Vec3::new(msg.new.x, PLAYER_HEIGHT * 0.5, msg.new.z);
-            transform.rotation = Quat::from_rotation_y(msg.new.yaw);
-            let color = dummy_color(&msg.new);
+        for (_e, mut pose, mat) in &mut dummies {
+            pose.x = msg.new.x;
+            pose.z = msg.new.z;
+            pose.yaw = msg.new.yaw;
+            pose.action = msg.new.action;
+            pose.action_ticks = msg.new.action_ticks as f32;
+            pose.hp = msg.new.hp;
+            pose.alive = msg.new.alive;
             if let Some(mut m) = materials.get_mut(&mat.0) {
-                m.base_color = color;
+                m.base_color = dummy_color(pose.action, pose.alive);
             }
         }
         for mut bar in &mut bars {
@@ -139,6 +176,26 @@ pub fn sync_dummy(
     for _ in deletes.read() {
         for (e, _, _) in &dummies {
             commands.entity(e).despawn();
+        }
+    }
+}
+
+pub fn interpolate_dummy(
+    time: Res<Time>,
+    mut dummies: Query<(&DummyPose, &mut Transform), With<DummyPawn>>,
+) {
+    let t = (10.0 * time.delta_secs()).min(1.0);
+    for (pose, mut transform) in &mut dummies {
+        let target = Vec3::new(pose.x, PLAYER_HEIGHT * 0.5, pose.z);
+        transform.translation = transform.translation.lerp(target, t);
+        transform.rotation = transform.rotation.slerp(Quat::from_rotation_y(pose.yaw), t);
+    }
+}
+
+pub fn tick_dummy_pose(time: Res<Time>, mut dummies: Query<&mut DummyPose>) {
+    for mut pose in &mut dummies {
+        if pose.action_ticks > 0.0 {
+            pose.action_ticks = (pose.action_ticks - time.delta_secs() * TICK_HZ).max(0.0);
         }
     }
 }
@@ -332,13 +389,205 @@ pub fn sync_vitals(
 pub fn flash_hits(
     mut events: ReadInsertMessage<CombatEvent>,
     mut local: Query<&mut Transform, With<LocalPlayer>>,
+    conn: Option<Res<StdbConn>>,
+    mut flash: ResMut<HitFlash>,
+    mut commands: Commands,
+    camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
 ) {
+    let me = conn.and_then(|c| c.try_identity());
+    let cam = camera.single().ok();
     for msg in events.read() {
-        if msg.row.kind == 1 || msg.row.kind == 2 {
+        let row = &msg.row;
+        if (row.kind == 1 || row.kind == 2) && me == Some(row.target) && !row.target_is_dummy {
             if let Ok(mut t) = local.single_mut() {
-                t.translation.y = PLAYER_HEIGHT * 0.5 + 0.08;
+                t.translation.x = row.x;
+                t.translation.z = row.z;
+                t.translation.y = PLAYER_HEIGHT * 0.5 + 0.06;
+            }
+            flash.t = 0.16;
+        }
+        if let Some((cam, cam_tf)) = cam {
+            if let Ok(screen) = cam.world_to_viewport(cam_tf, Vec3::new(row.x, 1.9, row.z)) {
+                let (text, color) = match row.kind {
+                    1 => (format!("{:.0}", row.damage), Color::srgb(0.95, 0.82, 0.45)),
+                    2 => ("KILL".into(), Color::srgb(0.95, 0.35, 0.22)),
+                    3 => ("BLOCK".into(), Color::srgb(0.55, 0.75, 0.95)),
+                    4 => ("DODGE".into(), Color::srgb(0.75, 0.9, 0.55)),
+                    5 => (format!("+{:.0}xp", row.damage), Color::srgb(0.55, 0.85, 0.45)),
+                    _ => continue,
+                };
+                commands.spawn((
+                    Node {
+                        position_type: PositionType::Absolute,
+                        left: Val::Px(screen.x),
+                        top: Val::Px(screen.y),
+                        ..default()
+                    },
+                    Text::new(text),
+                    TextFont::from_font_size(16.0),
+                    TextColor(color),
+                    DamageFloater { age: 0.0 },
+                ));
             }
         }
+    }
+}
+
+pub fn update_floaters(
+    time: Res<Time>,
+    mut commands: Commands,
+    mut q: Query<(Entity, &mut Node, &mut TextColor, &mut DamageFloater)>,
+) {
+    for (e, mut node, mut color, mut floater) in &mut q {
+        floater.age += time.delta_secs();
+        if let Val::Px(top) = node.top {
+            node.top = Val::Px(top - 42.0 * time.delta_secs());
+        }
+        let alpha = (1.0 - floater.age / 0.85).clamp(0.0, 1.0);
+        color.0.set_alpha(alpha);
+        if floater.age > 0.85 {
+            commands.entity(e).despawn();
+        }
+    }
+}
+
+pub fn tick_hit_flash(
+    time: Res<Time>,
+    mut flash: ResMut<HitFlash>,
+    local: Query<&MeshMaterial3d<StandardMaterial>, With<LocalPlayer>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
+    if flash.t <= 0.0 {
+        return;
+    }
+    flash.t = (flash.t - time.delta_secs()).max(0.0);
+    let mix = (flash.t / 0.16).clamp(0.0, 1.0);
+    let Ok(mat) = local.single() else {
+        return;
+    };
+    if let Some(mut m) = materials.get_mut(&mat.0) {
+        let base = Color::srgb(0.82, 0.62, 0.28);
+        m.base_color = base.mix(&Color::srgb(0.95, 0.25, 0.18), mix);
+    }
+}
+
+pub fn apply_predicted_starts(
+    mut control: ResMut<ControlState>,
+    vitals: Res<LocalVitals>,
+    mut local: Query<&mut Transform, With<LocalPlayer>>,
+) {
+    if control.pred_action == ACTION_BLOCK && (control.buttons & BTN_BLOCK) == 0 {
+        control.pred_action = ACTION_NONE;
+        control.pred_ticks = 0.0;
+    }
+    if control.drawn && control.pred_action == unbound_shared::ACTION_GATHER {
+        control.pred_action = ACTION_NONE;
+        control.pred_ticks = 0.0;
+    }
+    let buttons = merge_input_buttons(control.buttons, control.latched);
+    let start = if control.drawn {
+        start_drawn_action(
+            control.pred_action,
+            control.pred_loadout,
+            control.loadout,
+            control.pred_stamina,
+            buttons,
+        )
+    } else {
+        start_gather_action(
+            control.pred_action,
+            buttons,
+            vitals.node_dist <= GATHER_RANGE,
+        )
+    };
+    let Some(start) = start else {
+        return;
+    };
+    control.pred_action = start.action;
+    control.pred_ticks = predicted_busy_ticks(&start) as f32;
+    control.pred_loadout = if start.action == unbound_shared::ACTION_GATHER {
+        control.pred_loadout
+    } else {
+        start.loadout
+    };
+    if start.action != unbound_shared::ACTION_GATHER {
+        control.pred_stamina = start.stamina;
+    }
+    if start.action == ACTION_DODGE {
+        if let Ok(mut transform) = local.single_mut() {
+            let (dx, dz) = dodge_dir(control.dir_x, control.dir_z);
+            let (x, z) = integrate(
+                transform.translation.x,
+                transform.translation.z,
+                control.yaw,
+                dx,
+                dz,
+                dodge_burst_dt(),
+                DODGE_SPEED,
+            );
+            transform.translation.x = x;
+            transform.translation.z = z;
+        }
+    }
+}
+
+pub fn tick_prediction(time: Res<Time>, mut control: ResMut<ControlState>) {
+    let dt = time.delta_secs();
+    if control.pred_ticks > 0.0 {
+        control.pred_ticks = (control.pred_ticks - dt * TICK_HZ).max(0.0);
+        if control.pred_ticks <= 0.0 && control.pred_action != ACTION_BLOCK {
+            control.pred_action = ACTION_NONE;
+        }
+    }
+    let sprinting = (control.buttons & BTN_SPRINT) != 0
+        && control.pred_stamina > 1.0
+        && control.pred_action != ACTION_DODGE
+        && !unbound_shared::move_lock(control.pred_action);
+    if sprinting {
+        control.pred_stamina = (control.pred_stamina - SPRINT_STAMINA_PER_SEC * dt).max(0.0);
+    } else if control.pred_action != ACTION_DODGE && control.pred_action != ACTION_BLOCK {
+        control.pred_stamina = (control.pred_stamina + STAMINA_REGEN_PER_SEC * dt).min(MAX_STAMINA);
+    }
+}
+
+pub fn pose_weapons(
+    control: Res<ControlState>,
+    remotes: Query<(Entity, &ServerPose), With<RemotePlayer>>,
+    local: Query<Entity, With<LocalPlayer>>,
+    mut weapons: Query<(&WeaponVisual, &mut Transform, Option<&ChildOf>)>,
+) {
+    let local_e = local.single().ok();
+    for (visual, mut transform, parent) in &mut weapons {
+        let Some(parent) = parent else {
+            continue;
+        };
+        let (action, ticks, loadout) = if local_e == Some(parent.parent()) {
+            (control.pred_action, control.pred_ticks, control.pred_loadout)
+        } else if let Some((_, pose)) = remotes
+            .iter()
+            .find(|(e, _)| *e == parent.parent())
+        {
+            (pose.action, pose.action_ticks as f32, pose.loadout)
+        } else {
+            continue;
+        };
+        let (pitch, yaw, roll) = weapon_extra_rotation(action, ticks, loadout);
+        *transform = visual.rest
+            * Transform::from_rotation(Quat::from_euler(EulerRot::XYZ, pitch, yaw, roll));
+    }
+}
+
+pub fn pose_dummy_club(dummies: Query<&DummyPose, With<DummyPawn>>, mut clubs: Query<(&DummyClub, &mut Transform, Option<&ChildOf>)>) {
+    let dummy = dummies.single().ok();
+    for (club, mut transform, parent) in &mut clubs {
+        let Some(_parent) = parent else {
+            continue;
+        };
+        let Some(pose) = dummy else {
+            continue;
+        };
+        let pitch = dummy_club_pitch(pose.action, pose.action_ticks, dummy_windup_ticks(pose.action) as f32);
+        *transform = club.rest * Transform::from_rotation(Quat::from_rotation_x(pitch));
     }
 }
 
@@ -382,10 +631,20 @@ pub fn refresh_remote_weapons(
     weapons: Query<(Entity, &WeaponVisual, Option<&ChildOf>)>,
 ) {
     for (entity, pose) in &remotes {
-        let has_weapon = weapons
-            .iter()
-            .any(|(_, _, parent)| parent.map(|p| p.parent() == entity).unwrap_or(false));
-        if pose.drawn && !has_weapon {
+        let current = weapons.iter().find(|(_, _vis, parent)| {
+            parent.map(|p| p.parent() == entity).unwrap_or(false)
+        });
+        let mismatch = current
+            .map(|(_, vis, _)| vis.loadout != pose.loadout)
+            .unwrap_or(false);
+        if !pose.drawn || mismatch {
+            for (w, _, parent) in &weapons {
+                if parent.map(|p| p.parent() == entity).unwrap_or(false) {
+                    commands.entity(w).despawn();
+                }
+            }
+        }
+        if pose.drawn && (current.is_none() || mismatch) {
             attach_weapon(
                 &mut commands,
                 &mut meshes,
@@ -394,12 +653,6 @@ pub fn refresh_remote_weapons(
                 pose.loadout,
                 true,
             );
-        } else if !pose.drawn && has_weapon {
-            for (w, _, parent) in &weapons {
-                if parent.map(|p| p.parent() == entity).unwrap_or(false) {
-                    commands.entity(w).despawn();
-                }
-            }
         }
     }
 }
@@ -412,12 +665,14 @@ fn apply_player_vitals(vitals: &mut LocalVitals, p: &Player) {
     vitals.alive = p.alive;
 }
 
-fn dummy_color(dummy: &Dummy) -> Color {
-    if !dummy.alive {
+fn dummy_color(action: u8, alive: bool) -> Color {
+    if !alive {
         Color::srgb(0.15, 0.15, 0.15)
-    } else if dummy.action == ACTION_LIGHT || dummy.action == ACTION_HEAVY {
-        Color::srgb(0.95, 0.45, 0.12)
-    } else if dummy.action == ACTION_HIT {
+    } else if action == ACTION_HEAVY {
+        Color::srgb(1.0, 0.55, 0.08)
+    } else if action == ACTION_LIGHT {
+        Color::srgb(0.95, 0.72, 0.18)
+    } else if action == ACTION_HIT {
         Color::srgb(0.9, 0.35, 0.2)
     } else {
         Color::srgb(0.72, 0.22, 0.18)
@@ -473,7 +728,10 @@ fn attach_weapon(
                 ..default()
             })),
             tf,
-            WeaponVisual,
+            WeaponVisual {
+                loadout: loadout_id,
+                rest: tf,
+            },
         ))
         .id();
     commands.entity(parent).add_child(child);
@@ -485,17 +743,27 @@ fn spawn_dummy(
     materials: &mut Assets<StandardMaterial>,
     dummy: &Dummy,
 ) {
+    let club_rest = Transform::from_xyz(0.45, 0.1, -0.35);
     let root = commands
         .spawn((
             Mesh3d(meshes.add(Capsule3d::new(0.42, 1.05))),
             MeshMaterial3d(materials.add(StandardMaterial {
-                base_color: dummy_color(dummy),
+                base_color: dummy_color(dummy.action, dummy.alive),
                 perceptual_roughness: 0.65,
                 ..default()
             })),
             Transform::from_xyz(dummy.x, PLAYER_HEIGHT * 0.5, dummy.z)
                 .with_rotation(Quat::from_rotation_y(dummy.yaw)),
             DummyPawn,
+            DummyPose {
+                x: dummy.x,
+                z: dummy.z,
+                yaw: dummy.yaw,
+                action: dummy.action,
+                action_ticks: dummy.action_ticks as f32,
+                hp: dummy.hp,
+                alive: dummy.alive,
+            },
         ))
         .id();
     let club = commands
@@ -506,7 +774,8 @@ fn spawn_dummy(
                 perceptual_roughness: 0.9,
                 ..default()
             })),
-            Transform::from_xyz(0.45, 0.1, -0.35),
+            club_rest,
+            DummyClub { rest: club_rest },
         ))
         .id();
     let bar = commands

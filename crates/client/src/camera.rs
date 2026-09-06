@@ -3,7 +3,7 @@ use bevy::prelude::*;
 use bevy::window::{CursorGrabMode, CursorOptions};
 
 use crate::{LocalPlayer, MainCamera};
-use unbound_shared::PLAYER_HEIGHT;
+use unbound_shared::{ACTION_NONE, MAX_STAMINA, PLAYER_HEIGHT};
 
 const LOOK_SENS: f32 = 0.004;
 const CAMERA_DISTANCE: f32 = 5.5;
@@ -17,8 +17,13 @@ pub struct ControlState {
     pub dir_z: f32,
     pub send_accum: f32,
     pub buttons: u32,
+    pub latched: u32,
     pub loadout: u8,
     pub lock_on: bool,
+    pub pred_action: u8,
+    pub pred_ticks: f32,
+    pub pred_stamina: f32,
+    pub pred_loadout: u8,
 }
 
 impl Default for ControlState {
@@ -31,8 +36,13 @@ impl Default for ControlState {
             dir_z: 0.0,
             send_accum: 0.0,
             buttons: 0,
+            latched: 0,
             loadout: 0,
             lock_on: false,
+            pred_action: ACTION_NONE,
+            pred_ticks: 0.0,
+            pred_stamina: MAX_STAMINA,
+            pred_loadout: 0,
         }
     }
 }

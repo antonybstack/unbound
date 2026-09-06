@@ -252,4 +252,107 @@ mod tests {
         assert!(facing_dot(0.0, 0.0, 1.0) < -0.9);
         assert!(facing_dot(0.0, 1.0, 0.0).abs() < 0.1);
     }
+
+    #[test]
+    fn merge_buttons_keeps_one_frame_press() {
+        let held = BTN_SPRINT;
+        let latched = BTN_LIGHT | BTN_DODGE;
+        let merged = merge_input_buttons(held, latched);
+        assert_eq!(merged & BTN_LIGHT, BTN_LIGHT);
+        assert_eq!(merged & BTN_DODGE, BTN_DODGE);
+        assert_eq!(merged & BTN_SPRINT, BTN_SPRINT);
+    }
+
+    #[test]
+    fn light_attack_starts_when_free() {
+        let start = start_drawn_action(ACTION_NONE, LOADOUT_SWORD, LOADOUT_SWORD, 100.0, BTN_LIGHT)
+            .expect("light");
+        assert_eq!(start.action, ACTION_LIGHT);
+        assert!(start.pending_hit);
+        assert!(start.stamina < 100.0);
+        assert_eq!(start.ticks, SWORD.light_windup_ticks);
+    }
+
+    #[test]
+    fn busy_actor_cannot_start() {
+        assert!(
+            start_drawn_action(ACTION_LIGHT, LOADOUT_SWORD, LOADOUT_SWORD, 100.0, BTN_LIGHT)
+                .is_none()
+        );
+        assert!(
+            start_drawn_action(ACTION_HIT, LOADOUT_SWORD, LOADOUT_SWORD, 100.0, BTN_DODGE).is_none()
+        );
+    }
+
+    #[test]
+    fn swap_beats_attack() {
+        let start =
+            start_drawn_action(ACTION_NONE, LOADOUT_SWORD, LOADOUT_BOW, 100.0, BTN_LIGHT).unwrap();
+        assert_eq!(start.action, ACTION_SWAP);
+        assert_eq!(start.loadout, LOADOUT_BOW);
+        assert!(!start.pending_hit);
+    }
+
+    #[test]
+    fn dodge_costs_stamina_and_defaults_forward() {
+        let start = start_drawn_action(ACTION_NONE, LOADOUT_SWORD, LOADOUT_SWORD, 100.0, BTN_DODGE)
+            .expect("dodge");
+        assert_eq!(start.action, ACTION_DODGE);
+        assert!((start.stamina - (100.0 - SWORD.dodge_stamina)).abs() < 1e-3);
+        assert_eq!(dodge_dir(0.0, 0.0), (0.0, 1.0));
+        assert_eq!(dodge_dir(-1.0, 0.0), (-1.0, 0.0));
+    }
+
+    #[test]
+    fn empty_stamina_skips_light() {
+        assert!(
+            start_drawn_action(ACTION_NONE, LOADOUT_SWORD, LOADOUT_SWORD, 0.0, BTN_LIGHT).is_none()
+        );
+    }
+
+    #[test]
+    fn predicted_busy_covers_recover() {
+        let start = start_drawn_action(ACTION_NONE, LOADOUT_SWORD, LOADOUT_SWORD, 100.0, BTN_HEAVY)
+            .unwrap();
+        assert_eq!(
+            predicted_busy_ticks(&start),
+            SWORD.heavy_windup_ticks + SWORD.heavy_recover_ticks
+        );
+    }
+
+    #[test]
+    fn swing_progress_hits_one_at_impact() {
+        let left = SWORD.heavy_recover_ticks as f32;
+        let p = swing_progress(ACTION_HEAVY, left, LOADOUT_SWORD);
+        assert!((p - 1.0).abs() < 0.05, "progress {p}");
+    }
+
+    #[test]
+    fn dummy_club_raises_then_slams() {
+        let windup = dummy_light_windup() as f32;
+        let raised = dummy_club_pitch(ACTION_LIGHT, windup * 0.4, windup);
+        let slam = dummy_club_pitch(ACTION_LIGHT, 0.0, windup);
+        assert!(raised < -0.5, "raise {raised}");
+        assert!(slam > 0.5, "slam {slam}");
+        assert_eq!(dummy_club_pitch(ACTION_NONE, 0.0, windup), 0.0);
+    }
+
+    #[test]
+    fn gather_requires_range_and_button() {
+        assert!(start_gather_action(ACTION_NONE, BTN_INTERACT, false).is_none());
+        let start = start_gather_action(ACTION_NONE, BTN_INTERACT, true).unwrap();
+        assert_eq!(start.action, ACTION_GATHER);
+        assert_eq!(start.ticks, gather_ticks());
+    }
+
+    #[test]
+    fn block_only_on_sword() {
+        assert!(
+            start_drawn_action(ACTION_NONE, LOADOUT_BOW, LOADOUT_BOW, 100.0, BTN_BLOCK).is_none()
+        );
+        let start =
+            start_drawn_action(ACTION_NONE, LOADOUT_SWORD, LOADOUT_SWORD, 100.0, BTN_BLOCK).unwrap();
+        assert_eq!(start.action, ACTION_BLOCK);
+        assert!(!action_busy(ACTION_BLOCK));
+    }
 }
