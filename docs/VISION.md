@@ -131,6 +131,8 @@ An MMO is a studio. A yard that feels right is a side project.
 | **2 — 1v1 PvP** | Playable | Same combat rules on every player capsule. Two clients (or headless bots) share the yard; hits, blocks, deaths, and respawns apply to both. |
 | **3 — a character that persists** | Playable | `character` row keeps XP/name across disconnect. Client stores the STDB access token so a relaunch is the same wanderer. Skills go up when you land hits (level-up toast). Sheathed `E` gathers wood/ore into Gathering. |
 
+Proof gate: `./scripts/mvp_check.sh` must fail the process if dummy XP, persist reconnect, gather XP, bow XP, or 1v1 damage don't happen.
+
 **Not v1:** auction house, quest hubs, raids, OAuth, world streaming, navmesh armies, a character creator deep enough to ship a trailer.
 
 ## Risks that actually kill this

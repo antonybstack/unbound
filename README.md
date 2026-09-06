@@ -33,7 +33,7 @@ spacetime start --non-interactive   # if the host is down
 Open a second native or browser client to see another capsule interpolate in. Or prove the yard headless:
 
 ```bash
-./scripts/mvp_check.sh              # dummy farm, persist reconnect, gather, 1v1 bots
+./scripts/mvp_check.sh              # dummy, persist, gather, bow, 1v1 — fails if XP/HP don't move
 cargo run -p unbound-bot -- --name Alpha --token /tmp/unbound-alpha.token --mode pvp --seconds 12
 ```
 

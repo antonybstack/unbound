@@ -382,7 +382,21 @@ pub fn weapon_extra_rotation(action: u8, ticks_left: f32, loadout_id: u8) -> (f3
     match action {
         ACTION_BLOCK => (0.85, 0.15, -0.9),
         ACTION_DODGE => (0.35, 0.0, 0.4),
-        ACTION_SWAP => (-0.45, 0.2, 0.0),
+        ACTION_SWAP => {
+            let total = swap_ticks() as f32;
+            let t = if total > 1e-3 {
+                (1.0 - ticks_left / total).clamp(0.0, 1.0)
+            } else {
+                1.0
+            };
+            // Holster dip, then the new weapon comes up.
+            let pitch = if t < 0.5 {
+                -t * 2.4
+            } else {
+                -1.2 + (t - 0.5) * 2.4
+            };
+            (pitch, 0.25, 0.15)
+        }
         ACTION_HIT => (0.55, 0.0, 0.2),
         ACTION_GATHER => (0.4, 0.0, 0.15),
         ACTION_LIGHT | ACTION_HEAVY => {

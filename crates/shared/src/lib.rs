@@ -398,6 +398,9 @@ mod tests {
         assert_eq!(start.action, ACTION_SWAP);
         assert_eq!(start.loadout, LOADOUT_BOW);
         assert!(!start.pending_hit);
+        let mid = weapon_extra_rotation(ACTION_SWAP, swap_ticks() as f32 * 0.5, LOADOUT_BOW);
+        let start_pose = weapon_extra_rotation(ACTION_SWAP, swap_ticks() as f32, LOADOUT_BOW);
+        assert!(mid.0 < start_pose.0 - 0.3, "swap should dip the weapon");
     }
 
     #[test]
