@@ -71,4 +71,17 @@ pub fn play_local_sfx(
         ));
         control.sfx_dodge = false;
     }
+    if control.sfx_swing != 0 {
+        let heavy = control.sfx_swing == 2;
+        let handle = if heavy {
+            sfx.heavy.clone()
+        } else {
+            sfx.dodge.clone()
+        };
+        let mut settings = PlaybackSettings::DESPAWN;
+        settings.volume = bevy::audio::Volume::Linear(if heavy { 0.45 } else { 0.32 });
+        settings.speed = if heavy { 0.85 } else { 1.35 };
+        commands.spawn((AudioPlayer::new(handle), settings));
+        control.sfx_swing = 0;
+    }
 }

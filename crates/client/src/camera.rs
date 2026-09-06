@@ -35,6 +35,7 @@ pub struct ControlState {
     pub pred_shot: bool,
     pub hitstop: f32,
     pub sfx_dodge: bool,
+    pub sfx_swing: u8,
 }
 
 impl Default for ControlState {
@@ -60,6 +61,7 @@ impl Default for ControlState {
             pred_shot: false,
             hitstop: 0.0,
             sfx_dodge: false,
+            sfx_swing: 0,
         }
     }
 }

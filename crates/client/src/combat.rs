@@ -873,6 +873,11 @@ pub fn apply_predicted_starts(
     if start.pending_hit && loadout(start.loadout).is_projectile {
         control.pred_shot = true;
     }
+    if start.action == ACTION_LIGHT {
+        control.sfx_swing = 1;
+    } else if start.action == ACTION_HEAVY {
+        control.sfx_swing = 2;
+    }
     if start.action == ACTION_DODGE {
         control.sfx_dodge = true;
         if let Ok(mut transform) = local.single_mut() {
