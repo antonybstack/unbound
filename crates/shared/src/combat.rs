@@ -249,6 +249,7 @@ pub const DUMMY_STRIKE_RANGE: f32 = 2.55;
 pub const DUMMY_MELEE_RANGE: f32 = 2.2;
 pub const DUMMY_CHASE_SPEED: f32 = 3.2;
 pub const DUMMY_HOME_SPEED: f32 = 3.6;
+pub const DUMMY_STRAFE_SPEED: f32 = 2.2;
 pub const DUMMY_LIGHT_DAMAGE: f32 = 11.0;
 pub const DUMMY_HEAVY_DAMAGE: f32 = 20.0;
 pub const DUMMY_KEEP_OUT: f32 = 1.75;
@@ -301,6 +302,14 @@ pub fn dummy_move_dir(dist: f32) -> f32 {
     } else {
         0.0
     }
+}
+
+/// Sideways shuffle while holding the pocket. Zero when chasing, backing off, or about to swing.
+pub fn dummy_strafe_dir(pocket: f32, cooldown: u8) -> f32 {
+    if pocket.abs() > 0.01 || cooldown == 0 {
+        return 0.0;
+    }
+    if (cooldown / 10) % 2 == 0 { 1.0 } else { -1.0 }
 }
 
 pub fn camera_distance(drawn: bool, lock_on: bool, sprinting: bool) -> f32 {

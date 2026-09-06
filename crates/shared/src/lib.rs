@@ -554,6 +554,18 @@ mod tests {
     }
 
     #[test]
+    fn dummy_strafes_in_the_pocket() {
+        assert_eq!(dummy_strafe_dir(1.0, 15), 0.0);
+        assert_eq!(dummy_strafe_dir(-1.0, 15), 0.0);
+        assert_eq!(dummy_strafe_dir(0.0, 0), 0.0);
+        let right = dummy_strafe_dir(0.0, 5);
+        let left = dummy_strafe_dir(0.0, 15);
+        assert_eq!(right, 1.0);
+        assert_eq!(left, -1.0);
+        assert!(DUMMY_STRAFE_SPEED < DUMMY_CHASE_SPEED);
+    }
+
+    #[test]
     fn hp_does_not_regen_through_a_combo() {
         assert!(!hp_regen_ok(ACTION_HIT));
         assert!(!hp_regen_ok(ACTION_LIGHT));
