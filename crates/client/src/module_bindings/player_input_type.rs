@@ -14,6 +14,7 @@ pub struct PlayerInput {
     pub drawn: bool,
     pub buttons: u32,
     pub loadout: u8,
+    pub pitch: f32,
 }
 
 impl __sdk::InModule for PlayerInput {
@@ -31,6 +32,7 @@ pub struct PlayerInputCols {
     pub drawn: __sdk::__query_builder::Col<PlayerInput, bool>,
     pub buttons: __sdk::__query_builder::Col<PlayerInput, u32>,
     pub loadout: __sdk::__query_builder::Col<PlayerInput, u8>,
+    pub pitch: __sdk::__query_builder::Col<PlayerInput, f32>,
 }
 
 impl __sdk::__query_builder::HasCols for PlayerInput {
@@ -44,6 +46,7 @@ impl __sdk::__query_builder::HasCols for PlayerInput {
             drawn: __sdk::__query_builder::Col::new(table_name, "drawn"),
             buttons: __sdk::__query_builder::Col::new(table_name, "buttons"),
             loadout: __sdk::__query_builder::Col::new(table_name, "loadout"),
+            pitch: __sdk::__query_builder::Col::new(table_name, "pitch"),
         }
     }
 }

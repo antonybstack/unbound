@@ -107,6 +107,21 @@ pub fn yaw_forward(yaw: f32) -> (f32, f32) {
     (-yaw.sin(), -yaw.cos())
 }
 
+/// Camera-forward in XZY. Pitch 0 is level; negative looks down (Bevy YXZ).
+pub fn aim_dir(yaw: f32, pitch: f32) -> (f32, f32, f32) {
+    let (fx, fz) = yaw_forward(yaw);
+    let cp = pitch.cos();
+    (fx * cp, pitch.sin(), fz * cp)
+}
+
+pub const SHOT_SPAWN_Y: f32 = 1.15;
+pub const SHOT_GROUND_Y: f32 = 0.08;
+pub const SHOT_CEILING_Y: f32 = 12.0;
+
+pub fn shot_hits_height(y: f32) -> bool {
+    y > 0.2 && y < PLAYER_HEIGHT + 0.35
+}
+
 pub fn yaw_right(yaw: f32) -> (f32, f32) {
     (yaw.cos(), -yaw.sin())
 }
@@ -285,8 +300,43 @@ mod tests {
         assert!(move_lock(ACTION_HEAVY));
         assert!(move_lock(ACTION_GATHER));
         assert!(!move_lock(ACTION_LIGHT));
-        assert!(invulnerable(ACTION_DODGE));
+        assert!(invulnerable(ACTION_DODGE, 4));
+        assert!(!invulnerable(ACTION_DODGE, dodge_ticks()));
+        assert!(!invulnerable(ACTION_DODGE, 0));
+        assert!(!invulnerable(ACTION_LIGHT, 4));
         assert!(blocking(ACTION_BLOCK));
+    }
+
+    #[test]
+    fn aim_dir_level_matches_yaw_forward() {
+        let (x, y, z) = aim_dir(0.0, 0.0);
+        let (fx, fz) = yaw_forward(0.0);
+        assert!((x - fx).abs() < 1e-5);
+        assert!(y.abs() < 1e-5);
+        assert!((z - fz).abs() < 1e-5);
+    }
+
+    #[test]
+    fn aim_dir_looks_down_when_pitch_negative() {
+        let (_x, y, _z) = aim_dir(0.0, -0.5);
+        assert!(y < -0.4);
+    }
+
+    #[test]
+    fn dodge_iframes_are_the_middle_of_the_roll() {
+        let total = dodge_ticks();
+        assert!(!dodge_iframe(total));
+        assert!(dodge_iframe(total.saturating_sub(2)));
+        assert!(dodge_iframe(2));
+        assert!(!dodge_iframe(0));
+        assert!(!dodge_iframe(1));
+    }
+
+    #[test]
+    fn shots_miss_the_ground_and_sky() {
+        assert!(shot_hits_height(1.0));
+        assert!(!shot_hits_height(0.05));
+        assert!(!shot_hits_height(8.0));
     }
 
     #[test]

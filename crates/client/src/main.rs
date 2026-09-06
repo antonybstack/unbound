@@ -214,6 +214,7 @@ fn setup_scene(
         MeshMaterial3d(materials.add(StandardMaterial {
             base_color: Color::srgb(0.82, 0.62, 0.28),
             perceptual_roughness: 0.7,
+            alpha_mode: AlphaMode::Opaque,
             ..default()
         })),
         Transform::from_xyz(0.0, PLAYER_HEIGHT * 0.5, 0.0),

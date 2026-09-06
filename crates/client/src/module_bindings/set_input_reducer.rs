@@ -10,6 +10,7 @@ pub(super) struct SetInputArgs {
     pub dir_x: f32,
     pub dir_z: f32,
     pub yaw: f32,
+    pub pitch: f32,
     pub drawn: bool,
     pub buttons: u32,
     pub loadout: u8,
@@ -21,6 +22,7 @@ impl From<SetInputArgs> for super::Reducer {
             dir_x: args.dir_x,
             dir_z: args.dir_z,
             yaw: args.yaw,
+            pitch: args.pitch,
             drawn: args.drawn,
             buttons: args.buttons,
             loadout: args.loadout,
@@ -48,11 +50,12 @@ pub trait set_input {
         dir_x: f32,
         dir_z: f32,
         yaw: f32,
+        pitch: f32,
         drawn: bool,
         buttons: u32,
         loadout: u8,
     ) -> __sdk::Result<()> {
-        self.set_input_then(dir_x, dir_z, yaw, drawn, buttons, loadout, |_, _| {})
+        self.set_input_then(dir_x, dir_z, yaw, pitch, drawn, buttons, loadout, |_, _| {})
     }
 
     /// Request that the remote module invoke the reducer `set_input` to run as soon as possible,
@@ -66,15 +69,14 @@ pub trait set_input {
         dir_x: f32,
         dir_z: f32,
         yaw: f32,
+        pitch: f32,
         drawn: bool,
         buttons: u32,
         loadout: u8,
 
-        callback: impl FnOnce(
-            &super::ReducerEventContext,
-            Result<Result<(), String>, __sdk::InternalError>,
-        ) + Send
-        + 'static,
+        callback: impl FnOnce(&super::ReducerEventContext, Result<Result<(), String>, __sdk::InternalError>)
+            + Send
+            + 'static,
     ) -> __sdk::Result<()>;
 }
 
@@ -84,21 +86,21 @@ impl set_input for super::RemoteReducers {
         dir_x: f32,
         dir_z: f32,
         yaw: f32,
+        pitch: f32,
         drawn: bool,
         buttons: u32,
         loadout: u8,
 
-        callback: impl FnOnce(
-            &super::ReducerEventContext,
-            Result<Result<(), String>, __sdk::InternalError>,
-        ) + Send
-        + 'static,
+        callback: impl FnOnce(&super::ReducerEventContext, Result<Result<(), String>, __sdk::InternalError>)
+            + Send
+            + 'static,
     ) -> __sdk::Result<()> {
         self.imp.invoke_reducer_with_callback(
             SetInputArgs {
                 dir_x,
                 dir_z,
                 yaw,
+                pitch,
                 drawn,
                 buttons,
                 loadout,

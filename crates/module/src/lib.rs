@@ -6,7 +6,8 @@ use unbound_shared::{
     dummy_heavy_windup, dummy_light_windup, dummy_move_dir, facing_dot, hitstun_ticks, hp_regen_ok,
     integrate, invulnerable,
     knockback, loadout, move_lock, node_respawn_ticks, node_xp, push_apart, scaled_damage,
-    skill_for_loadout, skill_level, start_drawn_action, start_gather_action, yaw_forward,
+    shot_hits_height, skill_for_loadout, skill_level, start_drawn_action, start_gather_action,
+    aim_dir, SHOT_CEILING_Y, SHOT_GROUND_Y, SHOT_SPAWN_Y,
     ACTION_BLOCK, ACTION_DEAD, ACTION_DODGE, ACTION_GATHER, ACTION_HEAVY, ACTION_HIT, ACTION_LIGHT,
     ACTION_NONE, BODY_SEPARATION, BTN_BLOCK, BTN_SPRINT, DODGE_SPEED,
     DUMMY_AGGRO_RANGE, DUMMY_CHASE_SPEED, DUMMY_HEAVY_DAMAGE, DUMMY_HOME_SPEED, DUMMY_LEASH_RANGE,
@@ -48,6 +49,8 @@ pub struct PlayerInput {
     pub drawn: bool,
     pub buttons: u32,
     pub loadout: u8,
+    #[default(0.0)]
+    pub pitch: f32,
 }
 
 #[table(accessor = character, public)]
@@ -96,6 +99,10 @@ pub struct Projectile {
     pub damage: f32,
     pub ttl: u8,
     pub skill: u8,
+    #[default(1.15)]
+    pub y: f32,
+    #[default(0.0)]
+    pub vy: f32,
 }
 
 #[table(accessor = gather_node, public)]
@@ -228,6 +235,7 @@ pub fn set_input(
     dir_x: f32,
     dir_z: f32,
     yaw: f32,
+    pitch: f32,
     drawn: bool,
     buttons: u32,
     loadout: u8,
@@ -235,6 +243,7 @@ pub fn set_input(
     let identity = ctx.sender();
     let dir_x = dir_x.clamp(-1.0, 1.0);
     let dir_z = dir_z.clamp(-1.0, 1.0);
+    let pitch = pitch.clamp(-1.2, 0.5);
     let loadout = if loadout > 2 { LOADOUT_SWORD } else { loadout };
 
     if ctx.db.player_input().identity().find(&identity).is_some() {
@@ -243,6 +252,7 @@ pub fn set_input(
             dir_x,
             dir_z,
             yaw,
+            pitch,
             drawn,
             buttons,
             loadout,
@@ -253,6 +263,7 @@ pub fn set_input(
             dir_x,
             dir_z,
             yaw,
+            pitch,
             drawn,
             buttons,
             loadout,
@@ -502,12 +513,21 @@ fn resolve_player_attack(ctx: &ReducerContext, player: &Player) {
         level,
     );
     if def.is_projectile {
-        let (fx, fz) = yaw_forward(player.yaw);
+        let pitch = ctx
+            .db
+            .player_input()
+            .identity()
+            .find(&player.identity)
+            .map(|i| i.pitch)
+            .unwrap_or(0.0);
+        let (fx, fy, fz) = aim_dir(player.yaw, pitch);
         ctx.db.projectile().insert(Projectile {
             id: 0,
             x: player.x + fx * 0.9,
+            y: SHOT_SPAWN_Y + fy * 0.4,
             z: player.z + fz * 0.9,
             vx: fx * def.projectile_speed,
+            vy: fy * def.projectile_speed,
             vz: fz * def.projectile_speed,
             owner: player.identity,
             from_dummy: false,
@@ -721,16 +741,25 @@ fn tick_projectiles(ctx: &ReducerContext) {
     let shots: Vec<Projectile> = ctx.db.projectile().iter().collect();
     for mut shot in shots {
         shot.x += shot.vx * TICK_DT;
+        shot.y += shot.vy * TICK_DT;
         shot.z += shot.vz * TICK_DT;
         shot.ttl = shot.ttl.saturating_sub(1);
-        if shot.x.abs() > WORLD_HALF || shot.z.abs() > WORLD_HALF || shot.ttl == 0 {
+        if shot.x.abs() > WORLD_HALF
+            || shot.z.abs() > WORLD_HALF
+            || shot.ttl == 0
+            || shot.y < SHOT_GROUND_Y
+            || shot.y > SHOT_CEILING_Y
+        {
             ctx.db.projectile().id().delete(&shot.id);
             continue;
         }
         let mut consumed = false;
         if !shot.from_dummy {
             if let Some(mut dummy) = ctx.db.dummy().id().find(&DUMMY_ID) {
-                if dummy.alive && dist_xz(shot.x, shot.z, dummy.x, dummy.z) < 0.7 {
+                if dummy.alive
+                    && dist_xz(shot.x, shot.z, dummy.x, dummy.z) < 0.7
+                    && shot_hits_height(shot.y)
+                {
                     apply_dummy_damage(ctx, &mut dummy, shot.damage, shot.owner, shot.skill);
                     ctx.db.dummy().id().update(dummy);
                     consumed = true;
@@ -746,7 +775,9 @@ fn tick_projectiles(ctx: &ReducerContext) {
                 if !shot.from_dummy && victim.identity == shot.owner {
                     continue;
                 }
-                if dist_xz(shot.x, shot.z, victim.x, victim.z) <= PLAYER_RADIUS + 0.35 {
+                if dist_xz(shot.x, shot.z, victim.x, victim.z) <= PLAYER_RADIUS + 0.35
+                    && shot_hits_height(shot.y)
+                {
                     apply_player_damage(
                         ctx,
                         &mut victim,
@@ -858,7 +889,7 @@ fn apply_player_damage(
     from_z: f32,
     kb: f32,
 ) {
-    if invulnerable(victim.action) {
+    if invulnerable(victim.action, victim.action_ticks) {
         emit(
             ctx,
             EVT_DODGE,

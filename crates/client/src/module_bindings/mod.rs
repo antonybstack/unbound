@@ -52,6 +52,7 @@ pub enum Reducer {
         dir_x: f32,
         dir_z: f32,
         yaw: f32,
+        pitch: f32,
         drawn: bool,
         buttons: u32,
         loadout: u8,
@@ -80,6 +81,7 @@ impl __sdk::Reducer for Reducer {
                 dir_x,
                 dir_z,
                 yaw,
+                pitch,
                 drawn,
                 buttons,
                 loadout,
@@ -87,6 +89,7 @@ impl __sdk::Reducer for Reducer {
                 dir_x: dir_x.clone(),
                 dir_z: dir_z.clone(),
                 yaw: yaw.clone(),
+                pitch: pitch.clone(),
                 drawn: drawn.clone(),
                 buttons: buttons.clone(),
                 loadout: loadout.clone(),
@@ -532,19 +535,19 @@ impl __sdk::SubscriptionHandle for SubscriptionHandle {
 /// either a [`DbConnection`] or an [`EventContext`] and operate on either.
 pub trait RemoteDbContext:
     __sdk::DbContext<
-        DbView = RemoteTables,
-        Reducers = RemoteReducers,
-        SubscriptionBuilder = __sdk::SubscriptionBuilder<RemoteModule>,
-    >
+    DbView = RemoteTables,
+    Reducers = RemoteReducers,
+    SubscriptionBuilder = __sdk::SubscriptionBuilder<RemoteModule>,
+>
 {
 }
 impl<
-    Ctx: __sdk::DbContext<
+        Ctx: __sdk::DbContext<
             DbView = RemoteTables,
             Reducers = RemoteReducers,
             SubscriptionBuilder = __sdk::SubscriptionBuilder<RemoteModule>,
         >,
-> RemoteDbContext for Ctx
+    > RemoteDbContext for Ctx
 {
 }
 

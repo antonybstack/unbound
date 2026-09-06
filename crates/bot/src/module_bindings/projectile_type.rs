@@ -18,6 +18,8 @@ pub struct Projectile {
     pub damage: f32,
     pub ttl: u8,
     pub skill: u8,
+    pub y: f32,
+    pub vy: f32,
 }
 
 impl __sdk::InModule for Projectile {
@@ -39,6 +41,8 @@ pub struct ProjectileCols {
     pub damage: __sdk::__query_builder::Col<Projectile, f32>,
     pub ttl: __sdk::__query_builder::Col<Projectile, u8>,
     pub skill: __sdk::__query_builder::Col<Projectile, u8>,
+    pub y: __sdk::__query_builder::Col<Projectile, f32>,
+    pub vy: __sdk::__query_builder::Col<Projectile, f32>,
 }
 
 impl __sdk::__query_builder::HasCols for Projectile {
@@ -56,6 +60,8 @@ impl __sdk::__query_builder::HasCols for Projectile {
             damage: __sdk::__query_builder::Col::new(table_name, "damage"),
             ttl: __sdk::__query_builder::Col::new(table_name, "ttl"),
             skill: __sdk::__query_builder::Col::new(table_name, "skill"),
+            y: __sdk::__query_builder::Col::new(table_name, "y"),
+            vy: __sdk::__query_builder::Col::new(table_name, "vy"),
         }
     }
 }

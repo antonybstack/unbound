@@ -80,7 +80,7 @@ fn main() {
             // Enter the yard.
             let _ = conn
                 .reducers()
-                .set_input(0.0, 0.0, 0.0, false, 0, LOADOUT_SWORD);
+                .set_input(0.0, 0.0, 0.0, 0.0, false, 0, LOADOUT_SWORD);
             continue;
         };
         saw_self = true;
@@ -93,7 +93,7 @@ fn main() {
         let (yaw, dir_z, drawn, buttons, loadout) = think(args.mode, &conn, &me_row);
         let _ = conn
             .reducers()
-            .set_input(0.0, dir_z, yaw, drawn, buttons, loadout);
+            .set_input(0.0, dir_z, yaw, 0.0, drawn, buttons, loadout);
 
         if last_status.elapsed() >= Duration::from_secs(1) {
             last_status = Instant::now();

@@ -293,6 +293,7 @@ pub fn send_input(time: Res<Time>, mut control: ResMut<ControlState>, conn: Opti
         control.dir_x,
         control.dir_z,
         control.yaw,
+        control.pitch,
         control.drawn,
         buttons,
         control.loadout,

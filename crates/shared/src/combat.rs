@@ -134,8 +134,13 @@ pub fn blocking(action: u8) -> bool {
     action == ACTION_BLOCK
 }
 
-pub fn invulnerable(action: u8) -> bool {
-    action == ACTION_DODGE
+pub fn dodge_iframe(ticks_left: u8) -> bool {
+    let total = dodge_ticks();
+    ticks_left >= 2 && ticks_left + 1 <= total
+}
+
+pub fn invulnerable(action: u8, ticks_left: u8) -> bool {
+    action == ACTION_DODGE && dodge_iframe(ticks_left)
 }
 
 /// Buttons that are meaningful as a 1-frame press and must be latched until `set_input`.

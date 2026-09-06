@@ -3,7 +3,7 @@ use bevy_stdb::prelude::*;
 use unbound_shared::{
     ACTION_BLOCK, ACTION_DODGE, ACTION_HEAVY, ACTION_HIT, ACTION_LIGHT, ACTION_NONE, BTN_BLOCK,
     BTN_SPRINT, DODGE_SPEED, GATHER_RANGE, MAX_HP, MAX_STAMINA, PLAYER_HEIGHT,
-    SPRINT_STAMINA_PER_SEC, STAMINA_REGEN_PER_SEC, TICK_HZ, dodge_burst_dt, dodge_dir,
+    SPRINT_STAMINA_PER_SEC, STAMINA_REGEN_PER_SEC, TICK_HZ, dodge_burst_dt, dodge_dir, dodge_iframe,
     dummy_club_pitch, dummy_windup_ticks, integrate, loadout, merge_input_buttons,
     predicted_busy_ticks, start_drawn_action, start_gather_action, weapon_extra_rotation,
 };
@@ -35,6 +35,7 @@ pub struct Nameplate {
 pub struct ShotPawn {
     pub id: u32,
     pub vx: f32,
+    pub vy: f32,
     pub vz: f32,
 }
 
@@ -360,9 +361,10 @@ pub fn sync_projectiles(
         for (_, mut shot, mut transform) in &mut shots {
             if shot.id == msg.new.id {
                 shot.vx = msg.new.vx;
+                shot.vy = msg.new.vy;
                 shot.vz = msg.new.vz;
-                transform.translation = Vec3::new(msg.new.x, 1.1, msg.new.z);
-                aim_shot(&mut transform, shot.vx, shot.vz);
+                transform.translation = Vec3::new(msg.new.x, msg.new.y, msg.new.z);
+                aim_shot(&mut transform, shot.vx, shot.vy, shot.vz);
             }
         }
     }
@@ -379,17 +381,18 @@ pub fn fly_shots(time: Res<Time>, mut shots: Query<(&ShotPawn, &mut Transform)>)
     let dt = time.delta_secs();
     for (shot, mut transform) in &mut shots {
         transform.translation.x += shot.vx * dt;
+        transform.translation.y += shot.vy * dt;
         transform.translation.z += shot.vz * dt;
-        aim_shot(&mut transform, shot.vx, shot.vz);
+        aim_shot(&mut transform, shot.vx, shot.vy, shot.vz);
     }
 }
 
-fn aim_shot(transform: &mut Transform, vx: f32, vz: f32) {
-    if vx * vx + vz * vz < 1e-6 {
+fn aim_shot(transform: &mut Transform, vx: f32, vy: f32, vz: f32) {
+    let dir = Vec3::new(vx, vy, vz);
+    if dir.length_squared() < 1e-6 {
         return;
     }
-    let yaw = (-vx).atan2(-vz);
-    transform.rotation = Quat::from_rotation_y(yaw);
+    transform.look_to(dir, Vec3::Y);
 }
 
 pub fn sync_nodes(
@@ -624,21 +627,32 @@ pub fn update_floaters(
 pub fn tick_hit_flash(
     time: Res<Time>,
     mut flash: ResMut<HitFlash>,
+    control: Res<ControlState>,
     local: Query<&MeshMaterial3d<StandardMaterial>, With<LocalPlayer>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    if flash.t <= 0.0 {
-        return;
+    if flash.t > 0.0 {
+        flash.t = (flash.t - time.delta_secs()).max(0.0);
     }
-    flash.t = (flash.t - time.delta_secs()).max(0.0);
-    let mix = (flash.t / 0.16).clamp(0.0, 1.0);
     let Ok(mat) = local.single() else {
         return;
     };
-    if let Some(mut m) = materials.get_mut(&mat.0) {
-        let base = Color::srgb(0.82, 0.62, 0.28);
-        m.base_color = base.mix(&Color::srgb(0.95, 0.25, 0.18), mix);
+    let Some(mut m) = materials.get_mut(&mat.0) else {
+        return;
+    };
+    let ghost = control.pred_action == ACTION_DODGE
+        && dodge_iframe(control.pred_ticks.round().clamp(0.0, 255.0) as u8);
+    let mix = (flash.t / 0.16).clamp(0.0, 1.0);
+    let mut color = Color::srgb(0.82, 0.62, 0.28).mix(&Color::srgb(0.95, 0.25, 0.18), mix);
+    if ghost {
+        color = color.mix(&Color::srgb(0.95, 0.95, 1.0), 0.45);
+        color.set_alpha(0.42);
+        m.alpha_mode = AlphaMode::Blend;
+    } else {
+        color.set_alpha(1.0);
+        m.alpha_mode = AlphaMode::Opaque;
     }
+    m.base_color = color;
 }
 
 pub fn apply_predicted_starts(
@@ -1010,8 +1024,8 @@ fn spawn_shot(
     } else {
         meshes.add(Cuboid::new(0.07, 0.07, 0.55))
     };
-    let mut tf = Transform::from_xyz(shot.x, 1.1, shot.z);
-    aim_shot(&mut tf, shot.vx, shot.vz);
+    let mut tf = Transform::from_xyz(shot.x, shot.y, shot.z);
+    aim_shot(&mut tf, shot.vx, shot.vy, shot.vz);
     commands.spawn((
         Mesh3d(mesh),
         MeshMaterial3d(materials.add(StandardMaterial {
@@ -1023,6 +1037,7 @@ fn spawn_shot(
         ShotPawn {
             id: shot.id,
             vx: shot.vx,
+            vy: shot.vy,
             vz: shot.vz,
         },
     ));
