@@ -39,6 +39,7 @@ pub struct ControlState {
     pub sfx_draw: i8,
     pub sfx_foot: bool,
     pub foot_accum: f32,
+    pub sfx_spawn: bool,
 }
 
 impl Default for ControlState {
@@ -68,6 +69,7 @@ impl Default for ControlState {
             sfx_draw: 0,
             sfx_foot: false,
             foot_accum: 0.2,
+            sfx_spawn: false,
         }
     }
 }

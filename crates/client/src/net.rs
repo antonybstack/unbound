@@ -174,6 +174,9 @@ pub fn apply_player_updates(
                 let server = Vec3::new(msg.new.x, 0.0, msg.new.z);
                 let dead = !msg.new.alive || msg.new.action == ACTION_DEAD;
                 let spawning = msg.new.action == ACTION_SPAWN;
+                if spawning && control.pred_action != ACTION_SPAWN {
+                    control.sfx_spawn = true;
+                }
                 if dead || spawning || predicted.distance(server) > RECONCILE_SNAP {
                     transform.translation.x = msg.new.x;
                     transform.translation.z = msg.new.z;

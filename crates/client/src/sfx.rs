@@ -99,4 +99,11 @@ pub fn play_local_sfx(
         commands.spawn((AudioPlayer::new(sfx.gather.clone()), settings));
         control.sfx_foot = false;
     }
+    if control.sfx_spawn {
+        let mut settings = PlaybackSettings::DESPAWN;
+        settings.volume = bevy::audio::Volume::Linear(0.38);
+        settings.speed = 1.55;
+        commands.spawn((AudioPlayer::new(sfx.kill.clone()), settings));
+        control.sfx_spawn = false;
+    }
 }
