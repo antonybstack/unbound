@@ -887,8 +887,8 @@ fn attach_weapon(
         (1, false) => (
             meshes.add(Cuboid::new(0.08, 0.08, 1.15)),
             Color::srgb(0.45, 0.28, 0.12),
-            Transform::from_xyz(-0.22, 0.22, 0.08)
-                .with_rotation(Quat::from_rotation_z(1.15) * Quat::from_rotation_x(0.2)),
+            Transform::from_xyz(-0.05, 0.32, 0.38)
+                .with_rotation(Quat::from_rotation_x(-1.2)),
         ),
         (2, true) => (
             meshes.add(Cylinder::new(0.04, 1.4)),
@@ -898,7 +898,7 @@ fn attach_weapon(
         (2, false) => (
             meshes.add(Cylinder::new(0.04, 1.4)),
             Color::srgb(0.35, 0.2, 0.55),
-            Transform::from_xyz(-0.28, 0.2, 0.05).with_rotation(Quat::from_rotation_z(-0.35)),
+            Transform::from_xyz(0.12, 0.15, 0.36).with_rotation(Quat::from_rotation_x(0.2)),
         ),
         (_, true) => (
             meshes.add(Cuboid::new(0.12, 0.04, 0.9)),
@@ -908,8 +908,8 @@ fn attach_weapon(
         (_, false) => (
             meshes.add(Cuboid::new(0.12, 0.04, 0.9)),
             Color::srgb(0.75, 0.75, 0.8),
-            Transform::from_xyz(-0.28, 0.28, 0.06)
-                .with_rotation(Quat::from_rotation_z(0.55) * Quat::from_rotation_x(-1.15)),
+            Transform::from_xyz(0.08, 0.32, 0.36)
+                .with_rotation(Quat::from_rotation_x(-1.25)),
         ),
     };
     let child = commands
