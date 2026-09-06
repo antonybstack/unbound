@@ -281,6 +281,10 @@ pub const CAM_BLOCK_RADIUS: f32 = 0.95;
 pub const LOCK_RANGE: f32 = 16.0;
 pub const LOCK_PULSE_TIME: f32 = 0.22;
 pub const LOCK_PULSE_EXTRA: f32 = 0.7;
+pub const CROSSHAIR_KICK_TIME: f32 = 0.16;
+pub const CROSSHAIR_BORDER: f32 = 1.5;
+pub const CROSSHAIR_KICK_EXTRA: f32 = 1.6;
+pub const CROSSHAIR_ALPHA: f32 = 0.85;
 
 pub fn dummy_light_windup() -> u8 {
     12
@@ -411,6 +415,31 @@ pub fn camera_shake_amp(t: f32) -> f32 {
 pub fn lock_reticle_scale(t: f32) -> f32 {
     let a = (t / LOCK_PULSE_TIME).clamp(0.0, 1.0);
     1.0 + a * a * LOCK_PULSE_EXTRA
+}
+
+/// 1 at bolt-leave, 0 at rest. Quadratic ease so the flash snaps then settles.
+pub fn crosshair_kick(t: f32) -> f32 {
+    let a = (t / CROSSHAIR_KICK_TIME).clamp(0.0, 1.0);
+    a * a
+}
+
+/// Border px after a bolt leaves. Thick at t=CROSSHAIR_KICK_TIME, rest at 0.
+pub fn crosshair_border_px(t: f32) -> f32 {
+    CROSSHAIR_BORDER + crosshair_kick(t) * CROSSHAIR_KICK_EXTRA
+}
+
+/// Rest cream at 0.85; kick goes white and opaque. Sheathed stays 0.
+pub fn crosshair_tint(drawn: bool, t: f32) -> (f32, f32, f32, f32) {
+    if !drawn {
+        return (0.95, 0.95, 0.88, 0.0);
+    }
+    let k = crosshair_kick(t);
+    (
+        0.95 + k * 0.05,
+        0.95 + k * 0.05,
+        0.88 + k * 0.12,
+        CROSSHAIR_ALPHA + k * (1.0 - CROSSHAIR_ALPHA),
+    )
 }
 
 pub fn hp_regen_ok(action: u8) -> bool {

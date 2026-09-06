@@ -629,6 +629,28 @@ mod tests {
     }
 
     #[test]
+    fn crosshair_kicks_when_a_bolt_leaves() {
+        assert!(CROSSHAIR_KICK_TIME >= 0.12 && CROSSHAIR_KICK_TIME <= 0.18);
+        let rest = crosshair_border_px(0.0);
+        let kick = crosshair_border_px(CROSSHAIR_KICK_TIME);
+        assert!((rest - CROSSHAIR_BORDER).abs() < 1e-4);
+        assert!(kick > rest);
+        let mid = crosshair_border_px(CROSSHAIR_KICK_TIME * 0.5);
+        assert!(mid > rest && mid < kick);
+        assert!((crosshair_border_px(-0.5) - rest).abs() < 1e-4);
+        assert!((crosshair_border_px(CROSSHAIR_KICK_TIME * 2.0) - kick).abs() < 1e-4);
+        let (_, _, _, sheathed) = crosshair_tint(false, CROSSHAIR_KICK_TIME);
+        assert!(sheathed.abs() < 1e-4);
+        let (rr, rg, rb, ra) = crosshair_tint(true, 0.0);
+        let (kr, kg, kb, ka) = crosshair_tint(true, CROSSHAIR_KICK_TIME);
+        assert!((ra - CROSSHAIR_ALPHA).abs() < 1e-4);
+        assert!(ka > ra);
+        assert!(kr >= rr && kg >= rg && kb >= rb);
+        assert!((crosshair_kick(0.0)).abs() < 1e-4);
+        assert!((crosshair_kick(CROSSHAIR_KICK_TIME) - 1.0).abs() < 1e-4);
+    }
+
+    #[test]
     fn camera_push_out_leaves_the_shell() {
         let (x, y, z) = camera_push_out(0.1, 0.8, 0.0, 0.0, 0.8, 0.0, 1.0);
         let d = (x * x + (y - 0.8) * (y - 0.8) + z * z).sqrt();

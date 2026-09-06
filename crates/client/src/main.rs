@@ -444,6 +444,7 @@ fn setup_hud(mut commands: Commands) {
         },
         BorderColor::all(Color::srgba(0.95, 0.95, 0.9, 0.0)),
         BackgroundColor(Color::NONE),
+        Pickable::IGNORE,
         Crosshair,
     ));
 
@@ -843,12 +844,17 @@ fn update_help(
     }
 }
 
-fn update_crosshair(control: Res<ControlState>, mut q: Query<&mut BorderColor, With<Crosshair>>) {
-    let Ok(mut border) = q.single_mut() else {
+fn update_crosshair(
+    control: Res<ControlState>,
+    mut q: Query<(&mut Node, &mut BorderColor), With<Crosshair>>,
+) {
+    let Ok((mut node, mut border)) = q.single_mut() else {
         return;
     };
-    let alpha = if control.drawn { 0.85 } else { 0.0 };
-    *border = BorderColor::all(Color::srgba(0.95, 0.95, 0.88, alpha));
+    let t = control.shot_kick;
+    node.border = UiRect::all(Val::Px(unbound_shared::crosshair_border_px(t)));
+    let (r, g, b, a) = unbound_shared::crosshair_tint(control.drawn, t);
+    *border = BorderColor::all(Color::srgba(r, g, b, a));
 }
 
 fn update_dummy_pip(

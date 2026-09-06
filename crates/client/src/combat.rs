@@ -1198,6 +1198,7 @@ pub fn spawn_predicted_shots(
     );
     // Latch once at release; pred_shot stays true through windup without retriggering.
     control.sfx_shot = skill;
+    control.shot_kick = unbound_shared::CROSSHAIR_KICK_TIME;
     control.pred_shot = false;
 }
 
