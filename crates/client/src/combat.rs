@@ -89,6 +89,27 @@ pub struct DummyPose {
     pub pending_hit: bool,
 }
 
+#[derive(Component)]
+pub struct DummyStep {
+    pub accum: f32,
+    pub last_x: f32,
+    pub last_z: f32,
+    pub speed: f32,
+    pub since: f32,
+}
+
+impl DummyStep {
+    pub fn new(x: f32, z: f32) -> Self {
+        Self {
+            accum: 0.18,
+            last_x: x,
+            last_z: z,
+            speed: 0.0,
+            since: 0.0,
+        }
+    }
+}
+
 #[derive(Resource, Default)]
 pub struct HitFlash {
     pub t: f32,
@@ -1510,6 +1531,7 @@ fn spawn_dummy(
                 alive: dummy.alive,
                 pending_hit: dummy.pending_hit,
             },
+            DummyStep::new(dummy.x, dummy.z),
         ))
         .id();
     let club = commands

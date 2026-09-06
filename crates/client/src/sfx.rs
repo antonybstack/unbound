@@ -5,6 +5,7 @@ use unbound_shared::{
     LOADOUT_STAFF,
 };
 
+use crate::combat::{DummyPawn, DummyPose, DummyStep};
 use crate::module_bindings::{CombatEvent, Projectile};
 use crate::net::{LocalPlayer, RemotePlayer, RemoteStep, ServerPose};
 use crate::StdbConn;
@@ -360,6 +361,95 @@ pub fn tick_remote_steps(
             sfx.gather.clone(),
             sprint,
             base * 0.7 * atten,
+        );
+    }
+}
+
+const DUMMY_WALK_SPEED: f32 = 1.2;
+const DUMMY_SPRINT_SPEED: f32 = 6.0;
+
+/// Dummy chase/home cadence. Same lawn tick as remotes, a bit heavier, from pose xz.
+pub fn tick_dummy_steps(
+    mut commands: Commands,
+    time: Res<Time>,
+    sfx: Option<Res<Sfx>>,
+    local: Query<&Transform, With<LocalPlayer>>,
+    mut dummies: Query<(&DummyPose, &Transform, &mut DummyStep), With<DummyPawn>>,
+) {
+    let Some(sfx) = sfx else {
+        return;
+    };
+    let Ok(local_tf) = local.single() else {
+        return;
+    };
+    let dt = time.delta_secs();
+    if dt <= 0.0 {
+        return;
+    }
+    let lx = local_tf.translation.x;
+    let lz = local_tf.translation.z;
+    for (pose, tf, mut step) in &mut dummies {
+        step.since += dt;
+        let dx = pose.x - step.last_x;
+        let dz = pose.z - step.last_z;
+        let moved = (dx * dx + dz * dz).sqrt();
+        if moved > 0.02 {
+            let elapsed = step.since.clamp(1.0 / 60.0, 0.2);
+            step.speed = moved / elapsed;
+            step.last_x = pose.x;
+            step.last_z = pose.z;
+            step.since = 0.0;
+        } else if step.since > 0.12 {
+            step.speed = 0.0;
+        }
+
+        let can_step = pose.alive
+            && pose.action != ACTION_DODGE
+            && pose.action != ACTION_DEAD
+            && !move_lock(pose.action);
+        let sprinting = can_step && step.speed > DUMMY_SPRINT_SPEED;
+        let walking = can_step && !sprinting && step.speed > DUMMY_WALK_SPEED;
+        let foot = if sprinting {
+            step.accum += dt;
+            if step.accum >= 0.28 {
+                step.accum = 0.0;
+                2
+            } else {
+                0
+            }
+        } else if walking {
+            step.accum += dt;
+            if step.accum >= 0.42 {
+                step.accum = 0.0;
+                1
+            } else {
+                0
+            }
+        } else {
+            step.accum = 0.18;
+            0
+        };
+        if foot == 0 {
+            continue;
+        }
+        let rdx = tf.translation.x - lx;
+        let rdz = tf.translation.z - lz;
+        let range = (rdx * rdx + rdz * rdz).sqrt();
+        if range >= FOOT_MUTE {
+            continue;
+        }
+        let atten = if range <= FOOT_NEAR {
+            1.0
+        } else {
+            1.0 - (range - FOOT_NEAR) / (FOOT_MUTE - FOOT_NEAR)
+        };
+        let sprint = foot == 2;
+        let base = if sprint { 0.18 } else { 0.12 };
+        play_foot(
+            &mut commands,
+            sfx.gather.clone(),
+            sprint,
+            base * 0.85 * atten,
         );
     }
 }
