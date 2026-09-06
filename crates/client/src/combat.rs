@@ -2,11 +2,12 @@ use bevy::prelude::*;
 use bevy_stdb::prelude::*;
 use unbound_shared::{
     ACTION_BLOCK, ACTION_DODGE, ACTION_HEAVY, ACTION_HIT, ACTION_LIGHT, ACTION_NONE, BTN_BLOCK,
-    BTN_SPRINT, DODGE_SPEED, GATHER_RANGE, MAX_HP, MAX_STAMINA, PLAYER_HEIGHT, SHOT_CEILING_Y,
-    SHOT_GROUND_Y, SHOT_SPAWN_Y, SPRINT_STAMINA_PER_SEC, STAMINA_REGEN_PER_SEC, TICK_HZ, aim_dir,
-    dodge_burst_dt, dodge_dir, dodge_iframe, dummy_club_pitch, dummy_windup_ticks, integrate,
-    loadout, merge_input_buttons, predicted_busy_ticks, predicted_release_ticks,
-    start_drawn_action, start_gather_action, weapon_extra_rotation,
+    BTN_DODGE, BTN_HEAVY, BTN_LIGHT, BTN_SPRINT, DODGE_SPEED, GATHER_RANGE, MAX_HP, MAX_STAMINA,
+    PLAYER_HEIGHT, SHOT_CEILING_Y, SHOT_GROUND_Y, SHOT_SPAWN_Y, SPRINT_STAMINA_PER_SEC,
+    STAMINA_REGEN_PER_SEC, TICK_HZ, aim_dir, dodge_burst_dt, dodge_dir, dodge_iframe,
+    dummy_club_pitch, dummy_windup_ticks, integrate, loadout, merge_input_buttons,
+    predicted_busy_ticks, predicted_release_ticks, start_drawn_action, start_gather_action,
+    weapon_extra_rotation,
 };
 
 use crate::camera::ControlState;
@@ -82,6 +83,11 @@ pub struct DummyPose {
 
 #[derive(Resource, Default)]
 pub struct HitFlash {
+    pub t: f32,
+}
+
+#[derive(Resource, Default)]
+pub struct StamFlash {
     pub t: f32,
 }
 
@@ -447,12 +453,15 @@ pub fn sync_nodes(
     time: Res<Time>,
     control: Res<ControlState>,
     local: Query<&Transform, With<LocalPlayer>>,
-    mut nodes: Query<(
-        Entity,
-        &NodePawn,
-        &mut Transform,
-        &mut MeshMaterial3d<StandardMaterial>,
-    ), Without<LocalPlayer>>,
+    mut nodes: Query<
+        (
+            Entity,
+            &NodePawn,
+            &mut Transform,
+            &mut MeshMaterial3d<StandardMaterial>,
+        ),
+        Without<LocalPlayer>,
+    >,
 ) {
     if let Some(conn) = conn.as_ref() {
         for row in conn.db().gather_node().iter() {
@@ -788,6 +797,7 @@ pub fn apply_predicted_starts(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut control: ResMut<ControlState>,
+    mut stam_flash: ResMut<StamFlash>,
     vitals: Res<LocalVitals>,
     mut local: Query<&mut Transform, With<LocalPlayer>>,
 ) {
@@ -816,6 +826,10 @@ pub fn apply_predicted_starts(
         )
     };
     let Some(start) = start else {
+        if (control.latched & (BTN_LIGHT | BTN_HEAVY | BTN_DODGE)) != 0 {
+            stam_flash.t = 0.22;
+            control.shake = control.shake.max(0.06);
+        }
         return;
     };
     control.pred_action = start.action;

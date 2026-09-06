@@ -14,11 +14,12 @@ use unbound_shared::{
 
 use crate::camera::{ControlState, LockReticle, update_camera, update_cursor};
 use crate::combat::{
-    DummyPawn, DummyPose, HitFlash, LocalVitals, WeaponState, apply_predicted_starts, flash_hits,
-    fly_predicted_shots, fly_shots, interpolate_dummy, pose_dummy_club, pose_hp_bars, pose_shields,
-    pose_weapons, refresh_remote_weapons, refresh_weapon, spawn_predicted_shots, subscribe_world,
-    sync_dummy, sync_nameplates, sync_nodes, sync_projectiles, sync_vitals, tick_dummy_pose,
-    tick_dust, tick_hit_flash, tick_prediction, update_floaters, update_nameplates,
+    DummyPawn, DummyPose, HitFlash, LocalVitals, StamFlash, WeaponState, apply_predicted_starts,
+    flash_hits, fly_predicted_shots, fly_shots, interpolate_dummy, pose_dummy_club, pose_hp_bars,
+    pose_shields, pose_weapons, refresh_remote_weapons, refresh_weapon, spawn_predicted_shots,
+    subscribe_world, sync_dummy, sync_nameplates, sync_nodes, sync_projectiles, sync_vitals,
+    tick_dummy_pose, tick_dust, tick_hit_flash, tick_prediction, update_floaters,
+    update_nameplates,
 };
 use crate::module_bindings::{
     CharacterTableAccessor, CombatEventTableAccessor, DbConnection, DummyTableAccessor,
@@ -92,6 +93,7 @@ fn main() {
         .insert_resource(LocalVitals::default())
         .insert_resource(WeaponState::default())
         .insert_resource(HitFlash::default())
+        .insert_resource(StamFlash::default())
         .add_systems(Startup, (setup_scene, connect, setup_hud))
         .add_systems(
             Update,
@@ -582,6 +584,8 @@ fn read_combat_input(
 }
 
 fn update_hud(
+    time: Res<Time>,
+    mut stam_flash: ResMut<StamFlash>,
     control: Res<ControlState>,
     vitals: Res<LocalVitals>,
     mut title: Query<&mut Text, With<HudTitle>>,
@@ -589,7 +593,7 @@ fn update_hud(
     mut xp_label: Query<&mut Text, (With<HudXp>, Without<HudTitle>, Without<HudLog>)>,
     mut bars: ParamSet<(
         Query<&mut Node, With<HpFill>>,
-        Query<&mut Node, With<StamFill>>,
+        Query<(&mut Node, &mut BackgroundColor), With<StamFill>>,
         Query<&mut Node, With<DummyHpFill>>,
         Query<&mut Node, With<XpFill>>,
     )>,
@@ -630,11 +634,14 @@ fn update_hud(
             },
         );
     }
+    stam_flash.t = (stam_flash.t - time.delta_secs()).max(0.0);
     if let Ok(mut fill) = bars.p0().single_mut() {
         fill.width = Val::Percent((100.0 * (hp / MAX_HP)).clamp(0.0, 100.0));
     }
-    if let Ok(mut fill) = bars.p1().single_mut() {
+    if let Ok((mut fill, mut bg)) = bars.p1().single_mut() {
         fill.width = Val::Percent((100.0 * (stam / MAX_STAMINA)).clamp(0.0, 100.0));
+        let mix = (stam_flash.t / 0.22).clamp(0.0, 1.0);
+        bg.0 = Color::srgb(0.82, 0.72, 0.22).mix(&Color::srgb(0.95, 0.22, 0.16), mix);
     }
     if let Ok(mut fill) = bars.p2().single_mut() {
         fill.width = Val::Percent((100.0 * (vitals.dummy_hp / MAX_HP)).clamp(0.0, 100.0));
