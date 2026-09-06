@@ -8,7 +8,8 @@ use bevy::prelude::*;
 use bevy_stdb::prelude::*;
 use unbound_shared::{
     BTN_BLOCK, BTN_DODGE, BTN_HEAVY, BTN_INTERACT, BTN_LIGHT, BTN_SPRINT, GATHER_RANGE, MAX_HP,
-    MAX_STAMINA, PLAYER_HEIGHT, action_label, loadout,
+    MAX_STAMINA, PLAYER_HEIGHT, SKILL_GATHERING, SKILL_MAGIC, SKILL_RANGED, action_label, loadout,
+    skill_for_loadout, skill_label, skill_progress,
 };
 
 use crate::camera::{ControlState, LockReticle, update_camera, update_cursor};
@@ -169,6 +170,10 @@ struct StamFill;
 #[derive(Component)]
 struct DummyHpFill;
 #[derive(Component)]
+struct XpFill;
+#[derive(Component)]
+struct HudXp;
+#[derive(Component)]
 struct Crosshair;
 #[derive(Component)]
 struct DeathVeil;
@@ -309,6 +314,19 @@ fn setup_hud(mut commands: Commands) {
                 Color::srgb(0.72, 0.22, 0.18),
                 DummyHpFill,
             );
+            spawn_bar(
+                root,
+                Color::srgb(0.06, 0.12, 0.10),
+                Color::srgb(0.35, 0.78, 0.55),
+                XpFill,
+            );
+            root.spawn((
+                Text::new(""),
+                TextFont::from_font_size(12.0),
+                TextColor(Color::srgb(0.70, 0.88, 0.72)),
+                TextLayout::no_wrap(),
+                HudXp,
+            ));
             root.spawn((
                 Text::new(""),
                 TextFont::from_font_size(13.0),
@@ -567,11 +585,13 @@ fn update_hud(
     control: Res<ControlState>,
     vitals: Res<LocalVitals>,
     mut title: Query<&mut Text, With<HudTitle>>,
-    mut log: Query<&mut Text, (With<HudLog>, Without<HudTitle>)>,
+    mut log: Query<&mut Text, (With<HudLog>, Without<HudTitle>, Without<HudXp>)>,
+    mut xp_label: Query<&mut Text, (With<HudXp>, Without<HudTitle>, Without<HudLog>)>,
     mut bars: ParamSet<(
         Query<&mut Node, With<HpFill>>,
         Query<&mut Node, With<StamFill>>,
         Query<&mut Node, With<DummyHpFill>>,
+        Query<&mut Node, With<XpFill>>,
     )>,
 ) {
     let stance = if !vitals.alive || control.pred_action == unbound_shared::ACTION_DEAD {
@@ -618,6 +638,28 @@ fn update_hud(
     }
     if let Ok(mut fill) = bars.p2().single_mut() {
         fill.width = Val::Percent((100.0 * (vitals.dummy_hp / MAX_HP)).clamp(0.0, 100.0));
+    }
+    let (xp_skill, xp_val) = if !control.drawn && vitals.node_dist <= GATHER_RANGE {
+        (SKILL_GATHERING, vitals.gather_xp)
+    } else {
+        let s = skill_for_loadout(control.loadout);
+        let v = match s {
+            SKILL_RANGED => vitals.ranged_xp,
+            SKILL_MAGIC => vitals.magic_xp,
+            _ => vitals.melee_xp,
+        };
+        (s, v)
+    };
+    let (xp_lvl, into, span, frac) = skill_progress(xp_val);
+    if let Ok(mut fill) = bars.p3().single_mut() {
+        fill.width = Val::Percent((100.0 * frac).clamp(0.0, 100.0));
+    }
+    if let Ok(mut text) = xp_label.single_mut() {
+        text.0 = if span == 0 {
+            format!("{} {xp_lvl}  max", skill_label(xp_skill))
+        } else {
+            format!("{} {xp_lvl}  {into}/{span}", skill_label(xp_skill))
+        };
     }
     if let Ok(mut text) = log.single_mut() {
         let gather_hint = if !control.drawn && vitals.node_dist <= GATHER_RANGE {

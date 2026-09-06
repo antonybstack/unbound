@@ -107,6 +107,12 @@ pub struct LocalVitals {
     pub defence: u8,
     pub hitpoints: u8,
     pub gather: u8,
+    pub melee_xp: u64,
+    pub ranged_xp: u64,
+    pub magic_xp: u64,
+    pub defence_xp: u64,
+    pub hitpoints_xp: u64,
+    pub gather_xp: u64,
     pub alive: bool,
     pub dummy_hp: f32,
     pub dummy_alive: bool,
@@ -131,6 +137,12 @@ impl Default for LocalVitals {
             defence: 1,
             hitpoints: 1,
             gather: 1,
+            melee_xp: 0,
+            ranged_xp: 0,
+            magic_xp: 0,
+            defence_xp: 0,
+            hitpoints_xp: 0,
+            gather_xp: 0,
             alive: true,
             dummy_hp: MAX_HP,
             dummy_alive: true,
@@ -567,6 +579,12 @@ pub fn sync_vitals(
         vitals.defence = defence;
         vitals.hitpoints = hitpoints;
         vitals.gather = gather;
+        vitals.melee_xp = c.melee_xp;
+        vitals.ranged_xp = c.ranged_xp;
+        vitals.magic_xp = c.magic_xp;
+        vitals.defence_xp = c.defence_xp;
+        vitals.hitpoints_xp = c.hitpoints_xp;
+        vitals.gather_xp = c.gather_xp;
         vitals.skills_primed = true;
         if !primed {
             return;

@@ -213,6 +213,24 @@ pub fn skill_level(xp: u64) -> u8 {
     lvl.clamp(1, 50) as u8
 }
 
+pub fn skill_xp_floor(level: u8) -> u64 {
+    let n = u64::from(level.max(1).saturating_sub(1));
+    80 * n * n
+}
+
+/// Level, XP into this level, XP needed for next, fraction 0..1.
+pub fn skill_progress(xp: u64) -> (u8, u64, u64, f32) {
+    let lvl = skill_level(xp);
+    if lvl >= 50 {
+        return (50, 0, 0, 1.0);
+    }
+    let lo = skill_xp_floor(lvl);
+    let hi = skill_xp_floor(lvl.saturating_add(1));
+    let span = hi.saturating_sub(lo).max(1);
+    let into = xp.saturating_sub(lo).min(span);
+    (lvl, into, span, into as f32 / span as f32)
+}
+
 pub fn skill_label(skill: u8) -> &'static str {
     match skill {
         SKILL_RANGED => "Ranged",
@@ -272,6 +290,11 @@ mod tests {
         assert_eq!(skill_label(SKILL_GATHERING), "Gathering");
         assert_eq!(skill_level(0), 1);
         assert_eq!(skill_level(80), 2);
+        assert_eq!(skill_progress(0), (1, 0, 80, 0.0));
+        let (l, into, span, frac) = skill_progress(40);
+        assert_eq!((l, into, span), (1, 40, 80));
+        assert!((frac - 0.5).abs() < 1e-4);
+        assert_eq!(skill_progress(80), (2, 0, 240, 0.0));
         assert_eq!(skill_level(720), 4);
         assert_eq!(skill_level(80 * 49 * 49), 50);
         assert_eq!(skill_level(u64::MAX), 50);
