@@ -46,36 +46,36 @@ pub fn init(ctx: &ReducerContext) -> Result<(), String> {
 
 #[spacetimedb::reducer(client_connected)]
 pub fn connected(ctx: &ReducerContext) -> Result<(), String> {
-    let identity = ctx.sender();
-    if ctx.db.player().identity().find(&identity).is_some() {
-        return Ok(());
-    }
-    ctx.db.player().insert(Player {
-        identity,
-        x: 0.0,
-        y: 0.0,
-        z: 0.0,
-        yaw: 0.0,
-        drawn: false,
-    });
-    ctx.db.player_input().insert(PlayerInput {
-        identity,
-        dir_x: 0.0,
-        dir_z: 0.0,
-        yaw: 0.0,
-        drawn: false,
-    });
-    log::info!("player connected: {identity}");
+    // Do not spawn a pawn here. `spacetime sql` / `spacetime call` also connect,
+    // which would flash a ghost capsule at the origin.
+    log::info!("client connected: {}", ctx.sender());
     Ok(())
 }
 
 #[spacetimedb::reducer(client_disconnected)]
 pub fn disconnected(ctx: &ReducerContext) -> Result<(), String> {
     let identity = ctx.sender();
-    ctx.db.player().identity().delete(&identity);
+    let had_player = ctx.db.player().identity().delete(&identity);
     ctx.db.player_input().identity().delete(&identity);
-    log::info!("player disconnected: {identity}");
+    if had_player {
+        log::info!("player left: {identity}");
+    }
     Ok(())
+}
+
+fn upsert_input(ctx: &ReducerContext, identity: Identity, dir_x: f32, dir_z: f32, yaw: f32, drawn: bool) {
+    let row = PlayerInput {
+        identity,
+        dir_x,
+        dir_z,
+        yaw,
+        drawn,
+    };
+    if ctx.db.player_input().identity().find(&identity).is_some() {
+        ctx.db.player_input().identity().update(row);
+    } else {
+        ctx.db.player_input().insert(row);
+    }
 }
 
 #[spacetimedb::reducer]
@@ -87,19 +87,24 @@ pub fn set_input(
     drawn: bool,
 ) -> Result<(), String> {
     let identity = ctx.sender();
-    let Some(mut input) = ctx.db.player_input().identity().find(&identity) else {
-        return Err("no player input row".into());
-    };
-    input.dir_x = dir_x.clamp(-1.0, 1.0);
-    input.dir_z = dir_z.clamp(-1.0, 1.0);
-    input.yaw = yaw;
-    input.drawn = drawn;
-    ctx.db.player_input().identity().update(input);
+    let dir_x = dir_x.clamp(-1.0, 1.0);
+    let dir_z = dir_z.clamp(-1.0, 1.0);
+    upsert_input(ctx, identity, dir_x, dir_z, yaw, drawn);
 
     if let Some(mut player) = ctx.db.player().identity().find(&identity) {
         player.yaw = yaw;
         player.drawn = drawn;
         ctx.db.player().identity().update(player);
+    } else {
+        ctx.db.player().insert(Player {
+            identity,
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+            yaw,
+            drawn,
+        });
+        log::info!("player entered: {identity}");
     }
     Ok(())
 }

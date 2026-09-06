@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 use bevy_stdb::prelude::*;
-use unbound_shared::{INPUT_SEND_HZ, PLAYER_HEIGHT, RECONCILE_BLEND, RECONCILE_SNAP, integrate};
+use unbound_shared::{INPUT_SEND_HZ, PLAYER_HEIGHT, RECONCILE_SNAP, integrate};
 
 use crate::camera::ControlState;
 use crate::module_bindings::{
@@ -55,13 +55,10 @@ pub fn spawn_pawns_from_cache(
         if existing.iter().any(|id| id.identity == player.identity) {
             continue;
         }
-        spawn_pawn(
-            &mut commands,
-            &mut meshes,
-            &mut materials,
-            &player,
-            player.identity == me,
-        );
+        if player.identity == me {
+            continue;
+        }
+        spawn_pawn(&mut commands, &mut meshes, &mut materials, &player, false);
     }
 }
 
@@ -78,14 +75,10 @@ pub fn apply_player_inserts(
         if existing.iter().any(|id| id.identity == msg.row.identity) {
             continue;
         }
-        let is_local = me == Some(msg.row.identity);
-        spawn_pawn(
-            &mut commands,
-            &mut meshes,
-            &mut materials,
-            &msg.row,
-            is_local,
-        );
+        if me == Some(msg.row.identity) {
+            continue;
+        }
+        spawn_pawn(&mut commands, &mut meshes, &mut materials, &msg.row, false);
     }
 }
 
@@ -97,7 +90,6 @@ pub fn apply_player_updates(
         Option<&LocalPlayer>,
         &mut Transform,
     )>,
-    time: Res<Time>,
 ) {
     for msg in updates.read() {
         for (id, mut pose, local, mut transform) in &mut players {
@@ -109,16 +101,13 @@ pub fn apply_player_updates(
             pose.yaw = msg.new.yaw;
             pose.drawn = msg.new.drawn;
             if local.is_some() {
+                // Keep prediction authoritative unless we have clearly desynced.
+                // Blending toward a delayed snapshot every tick makes WASD feel sticky.
                 let predicted = Vec3::new(transform.translation.x, 0.0, transform.translation.z);
                 let server = Vec3::new(msg.new.x, 0.0, msg.new.z);
-                let err = predicted.distance(server);
-                if err > RECONCILE_SNAP {
+                if predicted.distance(server) > RECONCILE_SNAP {
                     transform.translation.x = msg.new.x;
                     transform.translation.z = msg.new.z;
-                } else if err > 0.02 {
-                    let t = (RECONCILE_BLEND * time.delta_secs()).min(1.0);
-                    transform.translation.x = predicted.x.lerp(server.x, t);
-                    transform.translation.z = predicted.z.lerp(server.z, t);
                 }
             }
         }

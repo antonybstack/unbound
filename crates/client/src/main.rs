@@ -50,6 +50,12 @@ fn main() {
             }),
             ..default()
         }))
+        .insert_resource(ClearColor(Color::srgb(0.52, 0.62, 0.72)))
+        .insert_resource(GlobalAmbientLight {
+            color: Color::srgb(0.85, 0.88, 0.95),
+            brightness: 220.0,
+            ..default()
+        })
         .add_plugins(stdb)
         .insert_resource(ControlState::default())
         .add_systems(Startup, (setup_scene, connect, setup_hud))
@@ -87,27 +93,48 @@ fn setup_scene(
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     commands.spawn((
-        Mesh3d(meshes.add(Plane3d::default().mesh().size(64.0, 64.0))),
-        MeshMaterial3d(materials.add(Color::srgb(0.18, 0.20, 0.16))),
+        Mesh3d(meshes.add(Plane3d::default().mesh().size(400.0, 400.0))),
+        MeshMaterial3d(materials.add(Color::srgb(0.22, 0.28, 0.20))),
     ));
 
-    let pillar = meshes.add(Cuboid::new(1.2, 3.0, 1.2));
-    let pillar_mat = materials.add(Color::srgb(0.32, 0.28, 0.24));
-    for (x, z) in [(-10.0, -10.0), (10.0, -10.0), (-10.0, 10.0), (10.0, 10.0)] {
+    let pillar = meshes.add(Cuboid::new(1.6, 4.0, 1.6));
+    let pillar_mat = materials.add(StandardMaterial {
+        base_color: Color::srgb(0.62, 0.38, 0.22),
+        perceptual_roughness: 0.85,
+        ..default()
+    });
+    for (x, z) in [
+        (-6.0, -8.0),
+        (6.0, -8.0),
+        (-6.0, 8.0),
+        (6.0, 8.0),
+        (0.0, -12.0),
+    ] {
         commands.spawn((
             Mesh3d(pillar.clone()),
             MeshMaterial3d(pillar_mat.clone()),
-            Transform::from_xyz(x, 1.5, z),
+            Transform::from_xyz(x, 2.0, z),
         ));
     }
 
     commands.spawn((
+        Mesh3d(meshes.add(Capsule3d::new(0.35, 0.9))),
+        MeshMaterial3d(materials.add(StandardMaterial {
+            base_color: Color::srgb(0.82, 0.62, 0.28),
+            perceptual_roughness: 0.7,
+            ..default()
+        })),
+        Transform::from_xyz(0.0, PLAYER_HEIGHT * 0.5, 0.0),
+        LocalPlayer,
+    ));
+
+    commands.spawn((
         DirectionalLight {
-            illuminance: 12_000.0,
+            illuminance: 18_000.0,
             shadow_maps_enabled: true,
             ..default()
         },
-        Transform::from_xyz(12.0, 24.0, 8.0).looking_at(Vec3::ZERO, Vec3::Y),
+        Transform::from_xyz(18.0, 28.0, 12.0).looking_at(Vec3::ZERO, Vec3::Y),
     ));
 
     commands.spawn((
@@ -124,12 +151,18 @@ pub struct MainCamera;
 fn setup_hud(mut commands: Commands) {
     commands.spawn((
         Text::new(hud_copy(false, false)),
+        TextFont::from_font_size(16.0),
+        TextColor(Color::srgb(0.95, 0.95, 0.90)),
+        TextLayout::no_wrap(),
         Node {
             position_type: PositionType::Absolute,
-            top: Val::Px(14.0),
-            left: Val::Px(16.0),
+            top: Val::Px(12.0),
+            left: Val::Px(14.0),
+            width: Val::Auto,
+            height: Val::Auto,
             ..default()
         },
+        BackgroundColor(Color::NONE),
         HudText,
     ));
 }
@@ -164,7 +197,7 @@ fn update_hud(
     let Ok(mut text) = text.single_mut() else {
         return;
     };
-    *text = Text::new(hud_copy(control.drawn, !local.is_empty()));
+    text.0 = hud_copy(control.drawn, !local.is_empty());
 }
 
 fn hud_copy(drawn: bool, connected: bool) -> String {
