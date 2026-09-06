@@ -323,6 +323,11 @@ pub fn lock_focus_xz(px: f32, pz: f32, tx: f32, tz: f32, mix: f32) -> (f32, f32)
     (px + (tx - px) * mix, pz + (tz - pz) * mix)
 }
 
+/// Camera pitch that looks at a lock target. Negative looks down (Bevy YXZ).
+pub fn lock_aim_pitch(from_y: f32, to_y: f32, dist_xz: f32) -> f32 {
+    (to_y - from_y).atan2(dist_xz.max(0.2)).clamp(-1.15, 0.45)
+}
+
 pub fn camera_shake_amp(t: f32) -> f32 {
     let a = (t / CAM_SHAKE_TIME).clamp(0.0, 1.0);
     a * a * 0.16

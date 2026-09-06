@@ -99,9 +99,9 @@ pub fn update_camera(
         for ev in motion.read() {
             if !control.lock_on {
                 control.yaw -= ev.delta.x * LOOK_SENS;
+                control.pitch -= ev.delta.y * LOOK_SENS;
+                control.pitch = control.pitch.clamp(-1.15, 0.45);
             }
-            control.pitch -= ev.delta.y * LOOK_SENS;
-            control.pitch = control.pitch.clamp(-1.15, 0.45);
         }
     } else {
         motion.clear();

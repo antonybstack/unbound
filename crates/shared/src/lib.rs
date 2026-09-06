@@ -523,6 +523,15 @@ mod tests {
     }
 
     #[test]
+    fn lock_aim_pitch_looks_at_the_chest() {
+        assert!(lock_aim_pitch(0.8, 0.8, 8.0).abs() < 0.05);
+        assert!(lock_aim_pitch(1.15, 0.3, 6.0) < -0.1);
+        assert!(lock_aim_pitch(0.8, 2.0, 4.0) > 0.1);
+        let p = lock_aim_pitch(0.8, 20.0, 0.1);
+        assert!(p <= 0.45);
+    }
+
+    #[test]
     fn dummy_holds_the_pocket() {
         assert_eq!(dummy_move_dir(4.0), 1.0);
         assert_eq!(dummy_move_dir(2.0), 0.0);

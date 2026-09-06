@@ -28,7 +28,7 @@ use crate::module_bindings::{
 use crate::net::{
     LocalPlayer, RemotePlayer, ServerPose, apply_player_deletes, apply_player_inserts,
     apply_player_updates, bind_local_player, connect, interpolate_remotes, predict_local,
-    send_input, spawn_pawns_from_cache,
+    send_input, spawn_pawns_from_cache, tick_remote_pose,
 };
 use crate::persist::persist_on_connect;
 
@@ -106,6 +106,7 @@ fn main() {
                 apply_player_updates,
                 apply_player_deletes,
                 interpolate_remotes,
+                tick_remote_pose,
                 sync_dummy,
                 tick_dummy_pose,
                 interpolate_dummy,
@@ -534,6 +535,11 @@ fn read_combat_input(
                     let dx = pos.x - me.translation.x;
                     let dz = pos.z - me.translation.z;
                     control.yaw = (-dx).atan2(-dz);
+                    control.pitch = unbound_shared::lock_aim_pitch(
+                        me.translation.y,
+                        pos.y,
+                        (dx * dx + dz * dz).sqrt(),
+                    );
                     control.lock_focus = Some(pos);
                 } else {
                     control.lock_on = false;

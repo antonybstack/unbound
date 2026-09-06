@@ -1097,7 +1097,7 @@ pub fn pose_weapons(
                 control.pred_loadout,
             )
         } else if let Some((_, pose)) = remotes.iter().find(|(e, _)| *e == parent.parent()) {
-            (pose.action, pose.action_ticks as f32, pose.loadout)
+            (pose.action, pose.action_ticks, pose.loadout)
         } else {
             continue;
         };

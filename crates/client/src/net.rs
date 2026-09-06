@@ -2,8 +2,8 @@ use bevy::prelude::*;
 use bevy_stdb::prelude::*;
 use unbound_shared::{
     ACTION_DEAD, ACTION_DODGE, ACTION_HIT, ACTION_NONE, BTN_SPRINT, DODGE_SPEED, INPUT_SEND_HZ,
-    MOVE_SPEED, PLAYER_HEIGHT, RECONCILE_SNAP, SPRINT_SPEED, integrate, merge_input_buttons,
-    move_lock,
+    MOVE_SPEED, PLAYER_HEIGHT, RECONCILE_SNAP, SPRINT_SPEED, TICK_HZ, integrate,
+    merge_input_buttons, move_lock,
 };
 
 use crate::camera::ControlState;
@@ -34,7 +34,7 @@ pub struct ServerPose {
     pub stamina: f32,
     pub alive: bool,
     pub action: u8,
-    pub action_ticks: u8,
+    pub action_ticks: f32,
     pub name: String,
 }
 
@@ -50,7 +50,7 @@ impl ServerPose {
             stamina: player.stamina,
             alive: player.alive,
             action: player.action,
-            action_ticks: player.action_ticks,
+            action_ticks: player.action_ticks as f32,
             name: player.name.clone(),
         }
     }
@@ -203,6 +203,15 @@ pub fn apply_player_deletes(
             if id.identity == msg.row.identity && local.is_none() {
                 commands.entity(entity).despawn();
             }
+        }
+    }
+}
+
+pub fn tick_remote_pose(time: Res<Time>, mut remotes: Query<&mut ServerPose, With<RemotePlayer>>) {
+    let dt = time.delta_secs() * TICK_HZ;
+    for mut pose in &mut remotes {
+        if pose.action_ticks > 0.0 {
+            pose.action_ticks = (pose.action_ticks - dt).max(0.0);
         }
     }
 }
