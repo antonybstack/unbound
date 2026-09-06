@@ -14,7 +14,8 @@ bevy.workspace = true
 bevy_stdb.workspace = true
 spacetimedb-sdk.workspace = true
 
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+# Linux native needs Wayland. macOS/Windows keep Bevy defaults (Metal / DX12).
+[target.'cfg(all(not(target_arch = "wasm32"), target_os = "linux"))'.dependencies]
 bevy = { workspace = true, features = ["wayland"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]

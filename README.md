@@ -6,7 +6,8 @@ Sheathe and you are in WoW. Draw and you are in Elden Ring. Your bag is your cla
 
 **MVP (slices 0–3) is playable.** Predicted WASD and swing start, sheathe/draw camera, three loadouts, a dummy with a readable windup, 1v1 PvP, and a `character` row that keeps XP and bag after you leave the yard. Native identity lives in `~/.local/share/unbound/identity.token`; the browser uses `localStorage`.
 
-Vision, inspirations, stack, and slice plan: **[docs/VISION.md](docs/VISION.md)**.
+Vision, inspirations, stack, and slice plan: **[docs/VISION.md](docs/VISION.md)**.  
+Continue from another machine: **[handoff.md](handoff.md)**.
 
 ## One-machine loop
 
