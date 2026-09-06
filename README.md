@@ -52,6 +52,7 @@ cargo run -p unbound-bot -- --name Alpha --token /tmp/unbound-alpha.token --mode
 | Tab | Lock onto nearest dummy or wanderer |
 | Q or MMB | Block (sword) |
 | Esc | Free the cursor |
+| H or F1 | Hold for controls, tap to pin |
 
 ## Layout
 

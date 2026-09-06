@@ -112,6 +112,7 @@ fn main() {
         .insert_resource(WeaponState::default())
         .insert_resource(HitFlash::default())
         .insert_resource(StamFlash::default())
+        .insert_resource(HelpOverlay::default())
         .add_systems(Startup, (setup_scene, connect, setup_hud, load_sfx))
         .add_systems(
             Update,
@@ -169,6 +170,7 @@ fn main() {
                 update_cursor,
                 update_camera,
                 update_hud,
+                update_help,
                 update_crosshair,
                 update_death_veil,
                 update_hotbar,
@@ -211,7 +213,16 @@ struct LoadoutSlot {
 #[derive(Component)]
 struct DummyPip;
 #[derive(Component)]
+struct HelpPanel;
+#[derive(Component)]
 pub struct MainCamera;
+
+#[derive(Resource, Default)]
+struct HelpOverlay {
+    toggled: bool,
+    holding: bool,
+    hold_at: f32,
+}
 
 fn setup_scene(
     mut commands: Commands,
@@ -463,6 +474,53 @@ fn setup_hud(mut commands: Commands) {
                 TextColor(Color::srgba(0.85, 0.18, 0.14, 0.0)),
                 TextLayout::no_wrap(),
                 DeathVeilText,
+            ));
+        });
+
+    commands
+        .spawn((
+            Node {
+                position_type: PositionType::Absolute,
+                top: Val::Px(80.0),
+                right: Val::Px(16.0),
+                width: Val::Px(280.0),
+                padding: UiRect::all(Val::Px(12.0)),
+                flex_direction: FlexDirection::Column,
+                row_gap: Val::Px(6.0),
+                display: Display::None,
+                ..default()
+            },
+            BackgroundColor(Color::srgba(0.04, 0.05, 0.06, 0.72)),
+            Pickable::IGNORE,
+            HelpPanel,
+        ))
+        .with_children(|root| {
+            root.spawn((
+                Text::new("CONTROLS"),
+                TextFont::from_font_size(15.0),
+                TextColor(Color::srgb(0.95, 0.95, 0.90)),
+                TextLayout::no_wrap(),
+                Pickable::IGNORE,
+            ));
+            root.spawn((
+                Text::new(
+                    "WASD          move\n\
+                     F             draw / sheathe\n\
+                     1 / 2 / 3     sword / bow / staff\n\
+                     LMB / RMB     light / heavy\n\
+                     Space         dodge\n\
+                     Shift         sprint\n\
+                     E             gather\n\
+                     Tab           lock\n\
+                     Q / MMB       block\n\
+                     Esc           cursor\n\
+                     \n\
+                     H / F1        hold or tap",
+                ),
+                TextFont::from_font_size(13.0),
+                TextColor(Color::srgb(0.90, 0.88, 0.80)),
+                TextLayout::no_wrap(),
+                Pickable::IGNORE,
             ));
         });
 }
@@ -730,7 +788,7 @@ fn update_hud(
              {gather_hint}{others}\n\
              {log}\n\
              WASD  F draw  LMB/RMB  Space dodge  Shift sprint  E gather\n\
-             1 sword  2 bow  3 staff  Tab lock  Q/MMB block",
+             1 sword  2 bow  3 staff  Tab lock  Q/MMB block  H help",
             dummy = vitals.dummy_hp,
             dummy_state = if vitals.dummy_alive { "" } else { "  (down)" },
             melee = vitals.melee.max(1),
@@ -741,6 +799,30 @@ fn update_hud(
             gather = vitals.gather.max(1),
             log = vitals.log,
         );
+    }
+}
+
+fn update_help(
+    time: Res<Time>,
+    keys: Res<ButtonInput<KeyCode>>,
+    mut help: ResMut<HelpOverlay>,
+    mut panel: Query<&mut Node, With<HelpPanel>>,
+) {
+    let held = keys.pressed(KeyCode::KeyH) || keys.pressed(KeyCode::F1);
+    if held && !help.holding {
+        help.holding = true;
+        help.hold_at = time.elapsed_secs();
+    }
+    if help.holding && !held {
+        if time.elapsed_secs() - help.hold_at < 0.28 {
+            help.toggled = !help.toggled;
+        }
+        help.holding = false;
+    }
+    let show = help.toggled || held;
+    if let Ok(mut node) = panel.single_mut() {
+        // Hidden nodes stay out of picking so WASD/look are never eaten.
+        node.display = if show { Display::Flex } else { Display::None };
     }
 }
 
