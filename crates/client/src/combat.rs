@@ -9,8 +9,9 @@ use unbound_shared::{
     predicted_release_ticks, start_drawn_action, start_gather_action, weapon_extra_rotation,
     ACTION_BLOCK, ACTION_DEAD, ACTION_DODGE, ACTION_HEAVY, ACTION_HIT, ACTION_LIGHT, ACTION_NONE,
     BTN_BLOCK, BTN_DODGE, BTN_HEAVY, BTN_LIGHT, BTN_SPRINT, DODGE_SPEED, GATHER_RANGE,
-    HYPERARMOR_FLASH_TIME, MAX_HP, MAX_STAMINA, MOVE_SPEED, PLAYER_HEIGHT, SHOT_CEILING_Y,
-    SHOT_GROUND_Y, SHOT_SPAWN_Y, SPRINT_STAMINA_PER_SEC, STAMINA_REGEN_PER_SEC, TICK_HZ,
+    HP_FLASH_TIME, HYPERARMOR_FLASH_TIME, MAX_HP, MAX_STAMINA, MOVE_SPEED, PLAYER_HEIGHT,
+    SHOT_CEILING_Y, SHOT_GROUND_Y, SHOT_SPAWN_Y, SPRINT_STAMINA_PER_SEC, STAMINA_REGEN_PER_SEC,
+    TICK_HZ,
 };
 
 use crate::camera::ControlState;
@@ -843,7 +844,7 @@ pub fn flash_hits(
                     t.translation.z = row.z;
                     t.translation.y = PLAYER_HEIGHT * 0.5 + 0.06;
                 }
-                flash.t = 0.16;
+                flash.t = HP_FLASH_TIME;
                 control.shake = control.shake.max(incoming_hit_shake(
                     row.kind,
                     row.damage,
@@ -962,7 +963,7 @@ pub fn tick_hit_flash(
         control.pred_ticks.round().clamp(0.0, 255.0) as u8,
         control.pred_loadout,
     );
-    let mix = (flash.t / 0.16).clamp(0.0, 1.0);
+    let mix = (flash.t / HP_FLASH_TIME).clamp(0.0, 1.0);
     let mut color = Color::srgb(0.82, 0.62, 0.28).mix(&Color::srgb(0.95, 0.25, 0.18), mix);
     if ghost {
         color = color.mix(&Color::srgb(0.95, 0.95, 1.0), 0.45);

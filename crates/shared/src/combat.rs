@@ -299,6 +299,7 @@ pub const HOTBAR_FLASH_TIME: f32 = 0.18;
 pub const HOTBAR_BORDER: f32 = 1.5;
 pub const HOTBAR_FLASH_EXTRA: f32 = 1.5;
 pub const GATHER_HINT_FLASH_TIME: f32 = 0.2;
+pub const HP_FLASH_TIME: f32 = 0.16;
 pub const HYPERARMOR_FLASH_TIME: f32 = 0.18;
 pub const HYPERARMOR_FLASH_EMISSIVE: f32 = 8.0;
 pub const HYPERARMOR_FLASH_SCALE: f32 = 0.1;
@@ -729,6 +730,22 @@ pub fn gather_hint_tint(visible: bool, t: f32) -> (f32, f32, f32, f32) {
         0.86 + k * 0.14,
         0.55 + k * 0.45,
         0.92 + k * (1.0 - 0.92),
+    )
+}
+
+/// 1 at chip, 0 at rest. Quadratic ease so the HUD bar snaps then settles.
+pub fn hp_bar_flash(t: f32) -> f32 {
+    let a = (t / HP_FLASH_TIME).clamp(0.0, 1.0);
+    a * a
+}
+
+/// Rest blood; flash goes white so a chip reads on the bar besides the mesh.
+pub fn hp_bar_tint(t: f32) -> (f32, f32, f32) {
+    let k = hp_bar_flash(t);
+    (
+        0.78 + k * (1.0 - 0.78),
+        0.20 + k * (0.92 - 0.20),
+        0.16 + k * (0.88 - 0.16),
     )
 }
 

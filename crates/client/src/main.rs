@@ -735,6 +735,7 @@ fn update_hud(
     time: Res<Time>,
     mut stam_flash: ResMut<StamFlash>,
     mut gather_flash: ResMut<GatherHintFlash>,
+    hit_flash: Res<HitFlash>,
     control: Res<ControlState>,
     vitals: Res<LocalVitals>,
     mut title: Query<&mut Text, With<HudTitle>>,
@@ -757,7 +758,7 @@ fn update_hud(
         ),
     >,
     mut bars: ParamSet<(
-        Query<&mut Node, With<HpFill>>,
+        Query<(&mut Node, &mut BackgroundColor), With<HpFill>>,
         Query<(&mut Node, &mut BackgroundColor), With<StamFill>>,
         Query<&mut Node, With<DummyHpFill>>,
         Query<&mut Node, With<XpFill>>,
@@ -815,8 +816,10 @@ fn update_hud(
         gather_flash.t = unbound_shared::GATHER_HINT_FLASH_TIME;
     }
     gather_flash.was_in = in_range;
-    if let Ok(mut fill) = bars.p0().single_mut() {
+    if let Ok((mut fill, mut bg)) = bars.p0().single_mut() {
         fill.width = Val::Percent((100.0 * (hp / MAX_HP)).clamp(0.0, 100.0));
+        let (r, g, b) = unbound_shared::hp_bar_tint(hit_flash.t);
+        bg.0 = Color::srgb(r, g, b);
     }
     if let Ok((mut fill, mut bg)) = bars.p1().single_mut() {
         fill.width = Val::Percent((100.0 * (stam / MAX_STAMINA)).clamp(0.0, 100.0));

@@ -913,6 +913,28 @@ mod tests {
     }
 
     #[test]
+    fn hp_bar_flashes_white_when_hp_chips() {
+        assert!((HP_FLASH_TIME - 0.16).abs() < 1e-4);
+        assert!((hp_bar_flash(0.0)).abs() < 1e-4);
+        assert!((hp_bar_flash(HP_FLASH_TIME) - 1.0).abs() < 1e-4);
+        let mid = hp_bar_flash(HP_FLASH_TIME * 0.5);
+        assert!(mid > 0.0 && mid < 1.0);
+        assert!((hp_bar_flash(-0.5)).abs() < 1e-4);
+        assert!((hp_bar_flash(HP_FLASH_TIME * 2.0) - 1.0).abs() < 1e-4);
+        let (rr, rg, rb) = hp_bar_tint(0.0);
+        assert!((rr - 0.78).abs() < 1e-4);
+        assert!((rg - 0.20).abs() < 1e-4);
+        assert!((rb - 0.16).abs() < 1e-4);
+        let (kr, kg, kb) = hp_bar_tint(HP_FLASH_TIME);
+        assert!(kr > rr && kg > rg && kb > rb);
+        assert!(kr >= 0.98 && kg >= 0.90 && kb >= 0.86);
+        let (mr, mg, mb) = hp_bar_tint(HP_FLASH_TIME * 0.5);
+        assert!(mr > rr && mr < kr);
+        assert!(mg > rg && mg < kg);
+        assert!(mb > rb && mb < kb);
+    }
+
+    #[test]
     fn gather_hint_pulses_when_sheathed_range_enters() {
         assert!((GATHER_HINT_FLASH_TIME - 0.2).abs() < 1e-4);
         assert!(gather_hint_in_range(true, GATHER_RANGE));
