@@ -1,22 +1,22 @@
 use bevy::prelude::*;
 use bevy_stdb::prelude::*;
 use unbound_shared::{
-    aim_dir, dodge_burst_dt, dodge_dir, dodge_iframe, dummy_club_pitch, dummy_windup_ticks,
-    integrate, loadout, merge_input_buttons, predicted_busy_ticks, predicted_release_ticks,
-    start_drawn_action, start_gather_action, weapon_extra_rotation, ACTION_BLOCK, ACTION_DODGE,
-    ACTION_HEAVY, ACTION_HIT, ACTION_LIGHT, ACTION_NONE, BTN_BLOCK, BTN_DODGE, BTN_HEAVY,
-    BTN_LIGHT, BTN_SPRINT, DODGE_SPEED, GATHER_RANGE, MAX_HP, MAX_STAMINA, PLAYER_HEIGHT,
-    SHOT_CEILING_Y, SHOT_GROUND_Y, SHOT_SPAWN_Y, SPRINT_STAMINA_PER_SEC, STAMINA_REGEN_PER_SEC,
-    TICK_HZ,
+    ACTION_BLOCK, ACTION_DODGE, ACTION_HEAVY, ACTION_HIT, ACTION_LIGHT, ACTION_NONE, BTN_BLOCK,
+    BTN_DODGE, BTN_HEAVY, BTN_LIGHT, BTN_SPRINT, DODGE_SPEED, GATHER_RANGE, MAX_HP, MAX_STAMINA,
+    PLAYER_HEIGHT, SHOT_CEILING_Y, SHOT_GROUND_Y, SHOT_SPAWN_Y, SPRINT_STAMINA_PER_SEC,
+    STAMINA_REGEN_PER_SEC, TICK_HZ, aim_dir, dodge_burst_dt, dodge_dir, dodge_iframe_for,
+    dummy_club_pitch, dummy_windup_ticks, integrate, loadout, merge_input_buttons,
+    predicted_busy_ticks, predicted_release_ticks, start_drawn_action, start_gather_action,
+    weapon_extra_rotation,
 };
 
 use crate::camera::ControlState;
 use crate::module_bindings::{
+    Character, CharacterTableAccess, CombatEvent, Dummy, DummyTableAccess, GatherNode,
+    GatherNodeTableAccess, Player, PlayerTableAccess, Projectile, ProjectileTableAccess,
     character_table::characterQueryTableAccess, combat_event_table::combat_eventQueryTableAccess,
     dummy_table::dummyQueryTableAccess, gather_node_table::gather_nodeQueryTableAccess,
-    player_table::playerQueryTableAccess, projectile_table::projectileQueryTableAccess, Character,
-    CharacterTableAccess, CombatEvent, Dummy, DummyTableAccess, GatherNode, GatherNodeTableAccess,
-    Player, PlayerTableAccess, Projectile, ProjectileTableAccess,
+    player_table::playerQueryTableAccess, projectile_table::projectileQueryTableAccess,
 };
 use crate::net::{LocalPlayer, RemotePlayer, ServerPose};
 use crate::{MainCamera, StdbConn, StdbSubs, SubKey};
@@ -783,7 +783,10 @@ pub fn tick_hit_flash(
         return;
     };
     let ghost = control.pred_action == ACTION_DODGE
-        && dodge_iframe(control.pred_ticks.round().clamp(0.0, 255.0) as u8);
+        && dodge_iframe_for(
+            control.pred_ticks.round().clamp(0.0, 255.0) as u8,
+            control.pred_loadout,
+        );
     let mix = (flash.t / 0.16).clamp(0.0, 1.0);
     let mut color = Color::srgb(0.82, 0.62, 0.28).mix(&Color::srgb(0.95, 0.25, 0.18), mix);
     if ghost {

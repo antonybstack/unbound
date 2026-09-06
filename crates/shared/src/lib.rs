@@ -379,6 +379,13 @@ mod tests {
     }
 
     #[test]
+    fn staff_rolls_lighter_than_sword() {
+        assert!(dodge_ticks_for(LOADOUT_STAFF) < dodge_ticks_for(LOADOUT_SWORD));
+        assert!(STAFF.dodge_stamina < SWORD.dodge_stamina);
+        assert!(SWORD.dodge_stamina > BOW.dodge_stamina);
+    }
+
+    #[test]
     fn shots_miss_the_ground_and_sky() {
         assert!(shot_hits_height(1.0));
         assert!(!shot_hits_height(0.05));

@@ -1,7 +1,7 @@
 use crate::{
-    facing_dot, ACTION_BLOCK, ACTION_DEAD, ACTION_DODGE, ACTION_GATHER, ACTION_HEAVY, ACTION_HIT,
-    ACTION_LIGHT, ACTION_SWAP, BTN_BLOCK, BTN_DODGE, BTN_HEAVY, BTN_INTERACT, BTN_LIGHT,
-    LOADOUT_BOW, LOADOUT_STAFF, LOADOUT_SWORD, TICK_DT, TICK_HZ,
+    ACTION_BLOCK, ACTION_DEAD, ACTION_DODGE, ACTION_GATHER, ACTION_HEAVY, ACTION_HIT, ACTION_LIGHT,
+    ACTION_SWAP, BTN_BLOCK, BTN_DODGE, BTN_HEAVY, BTN_INTERACT, BTN_LIGHT, LOADOUT_BOW,
+    LOADOUT_STAFF, LOADOUT_SWORD, TICK_DT, TICK_HZ, facing_dot,
 };
 
 #[derive(Clone, Copy, Debug)]
@@ -27,7 +27,7 @@ pub const SWORD: LoadoutDef = LoadoutDef {
     name: "Sword & board",
     light_stamina: 12.0,
     heavy_stamina: 28.0,
-    dodge_stamina: 22.0,
+    dodge_stamina: 26.0,
     light_damage: 14.0,
     heavy_damage: 28.0,
     light_windup_ticks: 5,
@@ -61,7 +61,7 @@ pub const STAFF: LoadoutDef = LoadoutDef {
     name: "Staff",
     light_stamina: 14.0,
     heavy_stamina: 32.0,
-    dodge_stamina: 22.0,
+    dodge_stamina: 18.0,
     light_damage: 13.0,
     heavy_damage: 26.0,
     light_windup_ticks: 7,
@@ -82,7 +82,17 @@ pub fn loadout(id: u8) -> LoadoutDef {
 }
 
 pub fn dodge_ticks() -> u8 {
-    (0.28 * TICK_HZ) as u8
+    dodge_ticks_for(LOADOUT_SWORD)
+}
+
+/// Sword & board rolls heavier; staff rolls lighter. Bag is the armor.
+pub fn dodge_ticks_for(loadout: u8) -> u8 {
+    let sec = match loadout {
+        LOADOUT_STAFF => 0.22,
+        LOADOUT_BOW => 0.26,
+        _ => 0.30,
+    };
+    (sec * TICK_HZ).max(1.0) as u8
 }
 
 pub fn swap_ticks() -> u8 {
@@ -214,12 +224,20 @@ pub fn resolve_guard(
 }
 
 pub fn dodge_iframe(ticks_left: u8) -> bool {
-    let total = dodge_ticks();
+    dodge_iframe_for(ticks_left, LOADOUT_SWORD)
+}
+
+pub fn dodge_iframe_for(ticks_left: u8, loadout: u8) -> bool {
+    let total = dodge_ticks_for(loadout);
     ticks_left >= 2 && ticks_left + 1 <= total
 }
 
 pub fn invulnerable(action: u8, ticks_left: u8) -> bool {
-    action == ACTION_DODGE && dodge_iframe(ticks_left)
+    invulnerable_for(action, ticks_left, LOADOUT_SWORD)
+}
+
+pub fn invulnerable_for(action: u8, ticks_left: u8, loadout: u8) -> bool {
+    action == ACTION_DODGE && dodge_iframe_for(ticks_left, loadout)
 }
 
 /// Buttons that are meaningful as a 1-frame press and must be latched until `set_input`.
@@ -377,7 +395,7 @@ pub fn start_drawn_action(
         if stamina_ok(stamina, cost) {
             return Some(ActionStart {
                 action: ACTION_DODGE,
-                ticks: dodge_ticks(),
+                ticks: dodge_ticks_for(current_loadout),
                 stamina: stamina - cost,
                 pending_hit: false,
                 loadout: current_loadout,

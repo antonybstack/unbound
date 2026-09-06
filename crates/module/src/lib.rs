@@ -4,7 +4,8 @@ use spacetimedb::{table, Identity, ReducerContext, ScheduleAt, Table};
 use unbound_shared::{
     action_busy, aim_dir, dist_xz, dodge_burst_dt, dodge_dir, dummy_cooldown_ticks,
     dummy_heavy_windup, dummy_light_windup, dummy_move_dir, dummy_recover_ticks, facing_dot,
-    guard_break_ticks, hitstun_ticks, hp_regen_ok, hyperarmor, integrate, invulnerable, knockback,
+    guard_break_ticks, hitstun_ticks, hp_regen_ok, hyperarmor, integrate, invulnerable_for,
+    knockback,
     loadout, move_lock, node_respawn_ticks, node_xp, push_apart, resolve_guard, scaled_damage,
     shot_hits_height, skill_for_loadout, skill_level, stamina_regen_ok, start_drawn_action,
     start_gather_action, GuardResult, ACTION_BLOCK, ACTION_DEAD, ACTION_DODGE, ACTION_GATHER,
@@ -899,7 +900,7 @@ fn apply_player_damage(
     from_z: f32,
     kb: f32,
 ) {
-    if invulnerable(victim.action, victim.action_ticks) {
+    if invulnerable_for(victim.action, victim.action_ticks, victim.loadout) {
         emit(
             ctx,
             EVT_DODGE,
