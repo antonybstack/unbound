@@ -1,8 +1,8 @@
 use bevy::prelude::*;
 use bevy_stdb::prelude::*;
 
-use crate::module_bindings::CombatEvent;
 use crate::StdbConn;
+use crate::module_bindings::CombatEvent;
 
 #[derive(Resource)]
 pub struct Sfx {
@@ -115,10 +115,11 @@ pub fn play_local_sfx(
         control.sfx_gather = false;
     }
     if control.sfx_block {
+        // Predicted raise: air sweep. Rim clack stays on a blocked hit.
         let mut settings = PlaybackSettings::DESPAWN;
-        settings.volume = bevy::audio::Volume::Linear(0.35);
-        settings.speed = 0.85;
-        commands.spawn((AudioPlayer::new(sfx.block.clone()), settings));
+        settings.volume = bevy::audio::Volume::Linear(0.34);
+        settings.speed = 0.92;
+        commands.spawn((AudioPlayer::new(sfx.dodge.clone()), settings));
         control.sfx_block = false;
     }
     if control.sfx_dummy != 0 {
