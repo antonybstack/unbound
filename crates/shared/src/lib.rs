@@ -711,6 +711,27 @@ mod tests {
     }
 
     #[test]
+    fn hyperarmor_flash_pings_besides_color() {
+        assert!((hyperarmor_flash_mix(0.0)).abs() < 1e-4);
+        assert!((hyperarmor_flash_mix(-0.5)).abs() < 1e-4);
+        assert!((hyperarmor_flash_mix(HYPERARMOR_FLASH_TIME) - 1.0).abs() < 1e-4);
+        assert!((hyperarmor_flash_mix(HYPERARMOR_FLASH_TIME * 2.0) - 1.0).abs() < 1e-4);
+        let mid = hyperarmor_flash_mix(HYPERARMOR_FLASH_TIME * 0.5);
+        assert!(mid > 0.0 && mid < 1.0);
+        let rest = hyperarmor_flash_scale(0.0);
+        let pop = hyperarmor_flash_scale(HYPERARMOR_FLASH_TIME);
+        assert!((rest - 1.0).abs() < 1e-4);
+        assert!(pop > rest);
+        assert!((pop - (1.0 + HYPERARMOR_FLASH_SCALE)).abs() < 1e-4);
+        assert!((hyperarmor_flash_emissive(0.0)).abs() < 1e-4);
+        assert!(
+            (hyperarmor_flash_emissive(HYPERARMOR_FLASH_TIME) - HYPERARMOR_FLASH_EMISSIVE).abs()
+                < 1e-4
+        );
+        assert!(HYPERARMOR_FLASH_TIME >= 0.12 && HYPERARMOR_FLASH_TIME <= 0.24);
+    }
+
+    #[test]
     fn dummy_holds_the_slam() {
         assert!(dummy_recover_ticks() >= 6);
         assert!(dummy_club_pitch(ACTION_HIT, dummy_recover_ticks() as f32, 12.0) > 0.2);

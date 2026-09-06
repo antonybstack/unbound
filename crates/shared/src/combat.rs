@@ -285,6 +285,9 @@ pub const CROSSHAIR_KICK_TIME: f32 = 0.16;
 pub const CROSSHAIR_BORDER: f32 = 1.5;
 pub const CROSSHAIR_KICK_EXTRA: f32 = 1.6;
 pub const CROSSHAIR_ALPHA: f32 = 0.85;
+pub const HYPERARMOR_FLASH_TIME: f32 = 0.18;
+pub const HYPERARMOR_FLASH_EMISSIVE: f32 = 8.0;
+pub const HYPERARMOR_FLASH_SCALE: f32 = 0.1;
 
 pub fn dummy_light_windup() -> u8 {
     12
@@ -464,6 +467,20 @@ pub fn hyperarmor(action: u8, pending_hit: bool, dummy: bool) -> bool {
     } else {
         action == ACTION_HEAVY
     }
+}
+
+/// 1 at t=HYPERARMOR_FLASH_TIME, 0 at rest. White ping over the dummy's windup color.
+pub fn hyperarmor_flash_mix(t: f32) -> f32 {
+    let a = (t / HYPERARMOR_FLASH_TIME).clamp(0.0, 1.0);
+    a * a
+}
+
+pub fn hyperarmor_flash_scale(t: f32) -> f32 {
+    1.0 + hyperarmor_flash_mix(t) * HYPERARMOR_FLASH_SCALE
+}
+
+pub fn hyperarmor_flash_emissive(t: f32) -> f32 {
+    hyperarmor_flash_mix(t) * HYPERARMOR_FLASH_EMISSIVE
 }
 
 /// Hold the club at the bottom of the slam so the impact reads.

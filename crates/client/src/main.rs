@@ -15,12 +15,13 @@ use unbound_shared::{
 
 use crate::camera::{ControlState, LockReticle, update_camera, update_cursor};
 use crate::combat::{
-    DummyPawn, DummyPose, HitFlash, LocalVitals, StamFlash, WeaponState, apply_predicted_starts,
-    flash_hits, fly_predicted_shots, fly_shots, interpolate_dummy, pose_dummy_club, pose_hp_bars,
-    pose_shields, pose_weapons, refresh_remote_weapons, refresh_weapon, spawn_predicted_shots,
-    subscribe_world, sync_dummy, sync_nameplates, sync_nodes, sync_projectiles, sync_vitals,
-    tick_dummy_pose, tick_dust, tick_hit_flash, tick_hit_sparks, tick_prediction,
-    tick_remote_ghost, update_floaters, update_nameplates,
+    DummyArmorFlash, DummyPawn, DummyPose, HitFlash, LocalVitals, StamFlash, WeaponState,
+    apply_predicted_starts, flash_hits, fly_predicted_shots, fly_shots, interpolate_dummy,
+    pose_dummy_club, pose_hp_bars, pose_shields, pose_weapons, refresh_remote_weapons,
+    refresh_weapon, spawn_predicted_shots, subscribe_world, sync_dummy, sync_nameplates,
+    sync_nodes, sync_projectiles, sync_vitals, tick_dummy_armor_flash, tick_dummy_pose, tick_dust,
+    tick_hit_flash, tick_hit_sparks, tick_prediction, tick_remote_ghost, update_floaters,
+    update_nameplates,
 };
 use crate::module_bindings::{
     CharacterTableAccessor, CombatEventTableAccessor, DbConnection, DummyTableAccessor,
@@ -115,6 +116,7 @@ fn main() {
         .insert_resource(WeaponState::default())
         .insert_resource(HitFlash::default())
         .insert_resource(StamFlash::default())
+        .insert_resource(DummyArmorFlash::default())
         .insert_resource(HelpOverlay::default())
         .add_systems(Startup, (setup_scene, connect, setup_hud, load_sfx))
         .add_systems(
@@ -149,6 +151,7 @@ fn main() {
                 update_nameplates,
                 update_dummy_pip,
                 tick_hit_flash,
+                tick_dummy_armor_flash,
                 tick_remote_ghost,
                 read_combat_input,
                 apply_predicted_starts,

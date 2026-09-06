@@ -2,13 +2,14 @@ use bevy::prelude::*;
 use bevy_stdb::prelude::*;
 use unbound_shared::{
     aim_dir, death_started, dodge_burst_dt, dodge_dir, dummy_club_pitch, dummy_telegraph_started,
-    dummy_windup_ticks, integrate, invulnerable_for, life_started, loadout, melee_lunge_dt,
-    merge_input_buttons,
+    dummy_windup_ticks, hyperarmor, hyperarmor_flash_emissive, hyperarmor_flash_scale, integrate,
+    invulnerable_for, life_started, loadout, melee_lunge_dt, merge_input_buttons,
     predicted_busy_ticks, predicted_release_ticks, start_drawn_action, start_gather_action,
     weapon_extra_rotation, ACTION_BLOCK, ACTION_DEAD, ACTION_DODGE, ACTION_HEAVY, ACTION_HIT,
     ACTION_LIGHT, ACTION_NONE, BTN_BLOCK, BTN_DODGE, BTN_HEAVY, BTN_LIGHT, BTN_SPRINT, DODGE_SPEED,
-    GATHER_RANGE, MAX_HP, MAX_STAMINA, MOVE_SPEED, PLAYER_HEIGHT, SHOT_CEILING_Y, SHOT_GROUND_Y,
-    SHOT_SPAWN_Y, SPRINT_STAMINA_PER_SEC, STAMINA_REGEN_PER_SEC, TICK_HZ,
+    GATHER_RANGE, HYPERARMOR_FLASH_TIME, MAX_HP, MAX_STAMINA, MOVE_SPEED, PLAYER_HEIGHT,
+    SHOT_CEILING_Y, SHOT_GROUND_Y, SHOT_SPAWN_Y, SPRINT_STAMINA_PER_SEC, STAMINA_REGEN_PER_SEC,
+    TICK_HZ,
 };
 
 use crate::camera::ControlState;
@@ -118,6 +119,11 @@ pub struct HitFlash {
 
 #[derive(Resource, Default)]
 pub struct StamFlash {
+    pub t: f32,
+}
+
+#[derive(Resource, Default)]
+pub struct DummyArmorFlash {
     pub t: f32,
 }
 
@@ -273,6 +279,7 @@ pub fn sync_dummy(
 
 pub fn interpolate_dummy(
     time: Res<Time>,
+    flash: Res<DummyArmorFlash>,
     mut dummies: Query<(&DummyPose, &mut Transform), With<DummyPawn>>,
 ) {
     let t = (10.0 * time.delta_secs()).min(1.0);
@@ -285,12 +292,12 @@ pub fn interpolate_dummy(
         let target = Vec3::new(pose.x, y, pose.z);
         transform.translation = transform.translation.lerp(target, t);
         transform.rotation = transform.rotation.slerp(Quat::from_rotation_y(pose.yaw), t);
-        let scale = if pose.alive {
-            Vec3::ONE
+        if pose.alive {
+            transform.scale = Vec3::splat(hyperarmor_flash_scale(flash.t));
         } else {
-            Vec3::new(1.0, 0.22, 1.0)
-        };
-        transform.scale = transform.scale.lerp(scale, t);
+            let down = Vec3::new(1.0, 0.22, 1.0);
+            transform.scale = transform.scale.lerp(down, t);
+        }
     }
 }
 
@@ -747,8 +754,10 @@ pub fn sync_vitals(
 pub fn flash_hits(
     mut events: ReadInsertMessage<CombatEvent>,
     mut local: Query<&mut Transform, With<LocalPlayer>>,
+    dummy: Query<&DummyPose, With<DummyPawn>>,
     conn: Option<Res<StdbConn>>,
     mut flash: ResMut<HitFlash>,
+    mut armor: ResMut<DummyArmorFlash>,
     mut control: ResMut<ControlState>,
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -775,6 +784,13 @@ pub fn flash_hits(
                     control
                         .hitstop
                         .max(if row.damage >= 20.0 { 0.10 } else { 0.045 });
+            }
+        }
+        if row.kind == 1 && row.target_is_dummy {
+            if let Ok(pose) = dummy.single() {
+                if hyperarmor(pose.action, pose.pending_hit, true) {
+                    armor.t = HYPERARMOR_FLASH_TIME;
+                }
             }
         }
         let (text, color) = match row.kind {
@@ -886,6 +902,25 @@ pub fn tick_hit_flash(
         m.alpha_mode = AlphaMode::Opaque;
     }
     m.base_color = color;
+}
+
+pub fn tick_dummy_armor_flash(
+    time: Res<Time>,
+    mut flash: ResMut<DummyArmorFlash>,
+    dummy: Query<&MeshMaterial3d<StandardMaterial>, With<DummyPawn>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
+    if flash.t > 0.0 {
+        flash.t = (flash.t - time.delta_secs()).max(0.0);
+    }
+    let Ok(mat) = dummy.single() else {
+        return;
+    };
+    let Some(mut m) = materials.get_mut(&mat.0) else {
+        return;
+    };
+    let e = hyperarmor_flash_emissive(flash.t);
+    m.emissive = LinearRgba::rgb(1.0, 0.95, 0.82) * e;
 }
 
 pub fn tick_remote_ghost(
