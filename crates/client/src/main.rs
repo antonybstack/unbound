@@ -8,14 +8,15 @@ mod sfx;
 use bevy::prelude::*;
 use bevy_stdb::prelude::*;
 use unbound_shared::{
-    BTN_BLOCK, BTN_DODGE, BTN_HEAVY, BTN_INTERACT, BTN_LIGHT, BTN_SPRINT, GATHER_RANGE, MAX_HP,
-    MAX_STAMINA, PLAYER_HEIGHT, SKILL_GATHERING, SKILL_MAGIC, SKILL_RANGED, action_label, loadout,
+    BTN_BLOCK, BTN_DODGE, BTN_HEAVY, BTN_INTERACT, BTN_LIGHT, BTN_SPRINT, MAX_HP, MAX_STAMINA,
+    PLAYER_HEIGHT, SKILL_GATHERING, SKILL_MAGIC, SKILL_RANGED, action_label, loadout,
     skill_for_loadout, skill_label, skill_progress,
 };
 
 use crate::camera::{ControlState, LockReticle, update_camera, update_cursor};
 use crate::combat::{
-    DummyArmorFlash, DummyPawn, DummyPose, HitFlash, LocalVitals, StamFlash, WeaponState,
+    DummyArmorFlash, DummyPawn, DummyPose, GatherHintFlash, HitFlash, LocalVitals, StamFlash,
+    WeaponState,
     apply_predicted_starts, flash_hits, fly_predicted_shots, fly_shots, interpolate_dummy,
     pose_dummy_club, pose_hp_bars, pose_shields, pose_weapons, refresh_remote_weapons,
     refresh_weapon, spawn_predicted_shots, subscribe_world, sync_dummy, sync_nameplates,
@@ -116,6 +117,7 @@ fn main() {
         .insert_resource(WeaponState::default())
         .insert_resource(HitFlash::default())
         .insert_resource(StamFlash::default())
+        .insert_resource(GatherHintFlash::default())
         .insert_resource(DummyArmorFlash::default())
         .insert_resource(HelpOverlay::default())
         .add_systems(Startup, (setup_scene, connect, setup_hud, load_sfx))
@@ -211,6 +213,8 @@ struct DummyHpFill;
 struct XpFill;
 #[derive(Component)]
 struct HudXp;
+#[derive(Component)]
+struct HudGather;
 #[derive(Component)]
 struct Crosshair;
 #[derive(Component)]
@@ -337,6 +341,7 @@ fn setup_hud(mut commands: Commands) {
                 ..default()
             },
             BackgroundColor(Color::srgba(0.04, 0.05, 0.06, 0.62)),
+            Pickable::IGNORE,
         ))
         .with_children(|root| {
             root.spawn((
@@ -344,6 +349,7 @@ fn setup_hud(mut commands: Commands) {
                 TextFont::from_font_size(15.0),
                 TextColor(Color::srgb(0.95, 0.95, 0.90)),
                 TextLayout::no_wrap(),
+                Pickable::IGNORE,
                 HudTitle,
             ));
             spawn_bar(
@@ -375,13 +381,27 @@ fn setup_hud(mut commands: Commands) {
                 TextFont::from_font_size(12.0),
                 TextColor(Color::srgb(0.70, 0.88, 0.72)),
                 TextLayout::no_wrap(),
+                Pickable::IGNORE,
                 HudXp,
+            ));
+            root.spawn((
+                Node {
+                    display: Display::None,
+                    ..default()
+                },
+                Text::new(""),
+                TextFont::from_font_size(13.0),
+                TextColor(Color::srgb(0.92, 0.86, 0.55)),
+                TextLayout::no_wrap(),
+                Pickable::IGNORE,
+                HudGather,
             ));
             root.spawn((
                 Text::new(""),
                 TextFont::from_font_size(13.0),
                 TextColor(Color::srgb(0.90, 0.88, 0.80)),
                 TextLayout::no_wrap(),
+                Pickable::IGNORE,
                 HudLog,
             ));
         });
@@ -714,16 +734,42 @@ fn read_combat_input(
 fn update_hud(
     time: Res<Time>,
     mut stam_flash: ResMut<StamFlash>,
+    mut gather_flash: ResMut<GatherHintFlash>,
     control: Res<ControlState>,
     vitals: Res<LocalVitals>,
     mut title: Query<&mut Text, With<HudTitle>>,
-    mut log: Query<&mut Text, (With<HudLog>, Without<HudTitle>, Without<HudXp>)>,
-    mut xp_label: Query<&mut Text, (With<HudXp>, Without<HudTitle>, Without<HudLog>)>,
+    mut log: Query<
+        &mut Text,
+        (
+            With<HudLog>,
+            Without<HudTitle>,
+            Without<HudXp>,
+            Without<HudGather>,
+        ),
+    >,
+    mut xp_label: Query<
+        &mut Text,
+        (
+            With<HudXp>,
+            Without<HudTitle>,
+            Without<HudLog>,
+            Without<HudGather>,
+        ),
+    >,
     mut bars: ParamSet<(
         Query<&mut Node, With<HpFill>>,
         Query<(&mut Node, &mut BackgroundColor), With<StamFill>>,
         Query<&mut Node, With<DummyHpFill>>,
         Query<&mut Node, With<XpFill>>,
+        Query<
+            (&mut Text, &mut TextColor, &mut Node),
+            (
+                With<HudGather>,
+                Without<HudTitle>,
+                Without<HudLog>,
+                Without<HudXp>,
+            ),
+        >,
     )>,
 ) {
     let stance = if !vitals.alive || control.pred_action == unbound_shared::ACTION_DEAD {
@@ -763,6 +809,12 @@ fn update_hud(
         );
     }
     stam_flash.t = (stam_flash.t - time.delta_secs()).max(0.0);
+    gather_flash.t = (gather_flash.t - time.delta_secs()).max(0.0);
+    let in_range = unbound_shared::gather_hint_in_range(!control.drawn, vitals.node_dist);
+    if unbound_shared::gather_hint_entered(gather_flash.was_in, in_range) {
+        gather_flash.t = unbound_shared::GATHER_HINT_FLASH_TIME;
+    }
+    gather_flash.was_in = in_range;
     if let Ok(mut fill) = bars.p0().single_mut() {
         fill.width = Val::Percent((100.0 * (hp / MAX_HP)).clamp(0.0, 100.0));
     }
@@ -774,7 +826,7 @@ fn update_hud(
     if let Ok(mut fill) = bars.p2().single_mut() {
         fill.width = Val::Percent((100.0 * (vitals.dummy_hp / MAX_HP)).clamp(0.0, 100.0));
     }
-    let (xp_skill, xp_val) = if !control.drawn && vitals.node_dist <= GATHER_RANGE {
+    let (xp_skill, xp_val) = if in_range {
         (SKILL_GATHERING, vitals.gather_xp)
     } else {
         let s = skill_for_loadout(control.loadout);
@@ -796,13 +848,27 @@ fn update_hud(
             format!("{} {xp_lvl}  {into}/{span}", skill_label(xp_skill))
         };
     }
-    if let Ok(mut text) = log.single_mut() {
-        let gather_hint = if !control.drawn && vitals.node_dist <= GATHER_RANGE {
+    if let Ok((mut text, mut color, mut node)) = bars.p4().single_mut() {
+        node.display = if in_range {
+            Display::Flex
+        } else {
+            Display::None
+        };
+        text.0 = if in_range {
             format!(
-                "E gather {} ({:.1}m)\n",
+                "E gather {} ({:.1}m)",
                 if vitals.node_kind == 1 { "ore" } else { "wood" },
                 vitals.node_dist
             )
+        } else {
+            String::new()
+        };
+        let (r, g, b, a) = unbound_shared::gather_hint_tint(in_range, gather_flash.t);
+        color.0 = Color::srgba(r, g, b, a);
+    }
+    if let Ok(mut text) = log.single_mut() {
+        let sheathed_hint = if in_range {
+            String::new()
         } else if !control.drawn && vitals.dummy_dist > unbound_shared::DUMMY_STRIKE_RANGE {
             "sheathed — dummy hunts drawn steel\n".into()
         } else {
@@ -816,7 +882,7 @@ fn update_hud(
         text.0 = format!(
             "HP {hp:3.0}   ST {stam:3.0}   Dummy {dummy:3.0}{dummy_state}\n\
              Melee {melee}  Range {ranged}  Magic {magic}  Def {defence}  HP {hitpoints}  Gather {gather}\n\
-             {gather_hint}{others}\n\
+             {sheathed_hint}{others}\n\
              {log}\n\
              WASD  F draw  LMB/RMB  Space dodge  Shift sprint  E gather\n\
              1 sword  2 bow  3 staff  Tab lock  Q/MMB block  H help",

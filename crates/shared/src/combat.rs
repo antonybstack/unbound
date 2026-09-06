@@ -1,7 +1,7 @@
 use crate::{
     facing_dot, ACTION_BLOCK, ACTION_DEAD, ACTION_DODGE, ACTION_GATHER, ACTION_HEAVY, ACTION_HIT,
     ACTION_LIGHT, ACTION_SPAWN, ACTION_SWAP, BTN_BLOCK, BTN_DODGE, BTN_HEAVY, BTN_INTERACT,
-    BTN_LIGHT, LOADOUT_BOW, LOADOUT_STAFF, LOADOUT_SWORD, TICK_DT, TICK_HZ,
+    BTN_LIGHT, GATHER_RANGE, LOADOUT_BOW, LOADOUT_STAFF, LOADOUT_SWORD, TICK_DT, TICK_HZ,
 };
 
 #[derive(Clone, Copy, Debug)]
@@ -298,6 +298,7 @@ pub const DUMMY_PIP_ALPHA: f32 = 0.9;
 pub const HOTBAR_FLASH_TIME: f32 = 0.18;
 pub const HOTBAR_BORDER: f32 = 1.5;
 pub const HOTBAR_FLASH_EXTRA: f32 = 1.5;
+pub const GATHER_HINT_FLASH_TIME: f32 = 0.2;
 pub const HYPERARMOR_FLASH_TIME: f32 = 0.18;
 pub const HYPERARMOR_FLASH_EMISSIVE: f32 = 8.0;
 pub const HYPERARMOR_FLASH_SCALE: f32 = 0.1;
@@ -698,6 +699,36 @@ pub fn hotbar_bg_tint(on: bool, drawn: bool, t: f32) -> (f32, f32, f32, f32) {
         g + (0.90 - g) * k * 0.55,
         b + (0.72 - b) * k * 0.55,
         a + (1.0 - a) * k,
+    )
+}
+
+/// Sheathed and close enough for E. Drawn steel hides the gather prompt.
+pub fn gather_hint_in_range(sheathed: bool, node_dist: f32) -> bool {
+    sheathed && node_dist <= GATHER_RANGE
+}
+
+/// True only on the false→true edge so standing next to a node does not re-flash.
+pub fn gather_hint_entered(was_in: bool, now_in: bool) -> bool {
+    !was_in && now_in
+}
+
+/// 1 at range-enter, 0 at rest. Quadratic ease so the prompt snaps then settles.
+pub fn gather_hint_flash(t: f32) -> f32 {
+    let a = (t / GATHER_HINT_FLASH_TIME).clamp(0.0, 1.0);
+    a * a
+}
+
+/// Rest gold cream; flash goes white. Drawn or out of range stays hidden.
+pub fn gather_hint_tint(visible: bool, t: f32) -> (f32, f32, f32, f32) {
+    if !visible {
+        return (0.95, 0.92, 0.70, 0.0);
+    }
+    let k = gather_hint_flash(t);
+    (
+        0.92 + k * 0.08,
+        0.86 + k * 0.14,
+        0.55 + k * 0.45,
+        0.92 + k * (1.0 - 0.92),
     )
 }
 

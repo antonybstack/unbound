@@ -913,6 +913,33 @@ mod tests {
     }
 
     #[test]
+    fn gather_hint_pulses_when_sheathed_range_enters() {
+        assert!((GATHER_HINT_FLASH_TIME - 0.2).abs() < 1e-4);
+        assert!(gather_hint_in_range(true, GATHER_RANGE));
+        assert!(gather_hint_in_range(true, 0.0));
+        assert!(!gather_hint_in_range(true, GATHER_RANGE + 0.01));
+        assert!(!gather_hint_in_range(false, 0.0));
+        assert!(gather_hint_entered(false, true));
+        assert!(!gather_hint_entered(true, true));
+        assert!(!gather_hint_entered(false, false));
+        assert!(!gather_hint_entered(true, false));
+        assert!((gather_hint_flash(0.0)).abs() < 1e-4);
+        assert!((gather_hint_flash(GATHER_HINT_FLASH_TIME) - 1.0).abs() < 1e-4);
+        let mid = gather_hint_flash(GATHER_HINT_FLASH_TIME * 0.5);
+        assert!(mid > 0.0 && mid < 1.0);
+        assert!((gather_hint_flash(-0.5)).abs() < 1e-4);
+        assert!((gather_hint_flash(GATHER_HINT_FLASH_TIME * 2.0) - 1.0).abs() < 1e-4);
+        let (_, _, _, hidden) = gather_hint_tint(false, GATHER_HINT_FLASH_TIME);
+        assert!(hidden.abs() < 1e-4);
+        let (rr, rg, rb, ra) = gather_hint_tint(true, 0.0);
+        let (kr, kg, kb, ka) = gather_hint_tint(true, GATHER_HINT_FLASH_TIME);
+        assert!(ka > ra);
+        assert!(kr >= rr && kg >= rg && kb >= rb);
+        let drawn = gather_hint_in_range(false, 1.0);
+        assert!(!gather_hint_entered(false, drawn));
+    }
+
+    #[test]
     fn camera_push_out_leaves_the_shell() {
         let (x, y, z) = camera_push_out(0.1, 0.8, 0.0, 0.0, 0.8, 0.0, 1.0);
         let d = (x * x + (y - 0.8) * (y - 0.8) + z * z).sqrt();

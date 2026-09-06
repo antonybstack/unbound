@@ -127,6 +127,12 @@ pub struct StamFlash {
 }
 
 #[derive(Resource, Default)]
+pub struct GatherHintFlash {
+    pub t: f32,
+    pub was_in: bool,
+}
+
+#[derive(Resource, Default)]
 pub struct DummyArmorFlash {
     pub t: f32,
 }
