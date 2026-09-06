@@ -557,6 +557,16 @@ mod tests {
     }
 
     #[test]
+    fn camera_push_out_leaves_the_shell() {
+        let (x, y, z) = camera_push_out(0.1, 0.8, 0.0, 0.0, 0.8, 0.0, 1.0);
+        let d = (x * x + (y - 0.8) * (y - 0.8) + z * z).sqrt();
+        assert!((d - 1.0).abs() < 1e-3);
+        let ok = camera_push_out(5.0, 0.8, 0.0, 0.0, 0.8, 0.0, 1.0);
+        assert_eq!(ok, (5.0, 0.8, 0.0));
+        assert!(CAM_BLOCK_RADIUS > PLAYER_RADIUS);
+    }
+
+    #[test]
     fn dummy_holds_the_pocket() {
         assert_eq!(dummy_move_dir(4.0), 1.0);
         assert_eq!(dummy_move_dir(2.0), 0.0);

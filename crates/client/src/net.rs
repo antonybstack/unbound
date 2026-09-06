@@ -359,7 +359,9 @@ fn spawn_pawn(
     if is_local {
         commands.entity(parent).insert(LocalPlayer);
     } else {
-        commands.entity(parent).insert(RemotePlayer);
+        commands
+            .entity(parent)
+            .insert((RemotePlayer, crate::camera::CamBlock));
         let bar = commands
             .spawn((
                 Mesh3d(meshes.add(Cuboid::new(1.0, 0.1, 0.04))),

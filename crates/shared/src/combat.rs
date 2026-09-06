@@ -277,6 +277,7 @@ pub const CAM_SPRINT_PULL: f32 = 0.85;
 pub const CAM_LOCK_MIX: f32 = 0.32;
 pub const CAM_SHOULDER: f32 = 0.42;
 pub const CAM_SHAKE_TIME: f32 = 0.16;
+pub const CAM_BLOCK_RADIUS: f32 = 0.95;
 pub const LOCK_RANGE: f32 = 16.0;
 
 pub fn dummy_light_windup() -> u8 {
@@ -336,6 +337,27 @@ pub fn camera_distance(drawn: bool, lock_on: bool, sprinting: bool) -> f32 {
 pub fn lock_focus_xz(px: f32, pz: f32, tx: f32, tz: f32, mix: f32) -> (f32, f32) {
     let mix = mix.clamp(0.0, 1.0);
     (px + (tx - px) * mix, pz + (tz - pz) * mix)
+}
+
+/// If the camera sits inside a body, push it to the shell so the fight stays on screen.
+pub fn camera_push_out(
+    cam_x: f32,
+    cam_y: f32,
+    cam_z: f32,
+    ox: f32,
+    oy: f32,
+    oz: f32,
+    radius: f32,
+) -> (f32, f32, f32) {
+    let dx = cam_x - ox;
+    let dy = cam_y - oy;
+    let dz = cam_z - oz;
+    let d = (dx * dx + dy * dy + dz * dz).sqrt();
+    if d >= radius || d < 1e-4 {
+        return (cam_x, cam_y, cam_z);
+    }
+    let s = radius / d;
+    (ox + dx * s, oy + dy * s, oz + dz * s)
 }
 
 /// Camera pitch that looks at a lock target. Negative looks down (Bevy YXZ).

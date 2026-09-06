@@ -4,9 +4,12 @@ use bevy::window::{CursorGrabMode, CursorOptions};
 
 use crate::{LocalPlayer, MainCamera};
 use unbound_shared::{
-    ACTION_NONE, CAM_SHEATHED, CAM_SHOULDER, MAX_STAMINA, PLAYER_HEIGHT, camera_distance,
-    camera_shake_amp, lock_focus_xz,
+    ACTION_NONE, CAM_BLOCK_RADIUS, CAM_SHEATHED, CAM_SHOULDER, MAX_STAMINA, PLAYER_HEIGHT,
+    camera_distance, camera_push_out, camera_shake_amp, lock_focus_xz,
 };
+
+#[derive(Component)]
+pub struct CamBlock;
 
 const LOOK_SENS: f32 = 0.004;
 
@@ -100,6 +103,15 @@ pub fn update_camera(
     mut control: ResMut<ControlState>,
     mut camera: Query<&mut Transform, With<MainCamera>>,
     local: Query<&Transform, (With<LocalPlayer>, Without<MainCamera>)>,
+    blockers: Query<
+        &Transform,
+        (
+            With<CamBlock>,
+            Without<MainCamera>,
+            Without<LocalPlayer>,
+            Without<LockReticle>,
+        ),
+    >,
     mut reticle: Query<
         &mut Transform,
         (With<LockReticle>, Without<MainCamera>, Without<LocalPlayer>),
@@ -161,6 +173,19 @@ pub fn update_camera(
     };
     let offset = rot * (Vec3::new(0.0, 0.0, control.cam_dist) + shoulder);
     camera.translation = focus + offset;
+    for body in &blockers {
+        let p = body.translation;
+        let (x, y, z) = camera_push_out(
+            camera.translation.x,
+            camera.translation.y,
+            camera.translation.z,
+            p.x,
+            p.y,
+            p.z,
+            CAM_BLOCK_RADIUS,
+        );
+        camera.translation = Vec3::new(x, y, z);
+    }
     camera.look_at(focus, Vec3::Y);
 
     if let Ok(mut ring) = reticle.single_mut() {

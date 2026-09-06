@@ -1440,6 +1440,7 @@ fn spawn_dummy(
             Transform::from_xyz(dummy.x, PLAYER_HEIGHT * 0.5, dummy.z)
                 .with_rotation(Quat::from_rotation_y(dummy.yaw)),
             DummyPawn,
+            crate::camera::CamBlock,
             DummyPose {
                 x: dummy.x,
                 z: dummy.z,
