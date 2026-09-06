@@ -1,8 +1,12 @@
 # Unbound
 
-Browser-first action RPG slice: **Bevy** client, **SpacetimeDB** backend, **Rust** everywhere.
+Browser-first persistent action RPG: **Bevy** client, **SpacetimeDB** backend, **Rust** everywhere.
 
-Slice 0 is locomotion. WASD is predicted locally. The module is authoritative at 30 Hz. Sheathed = WoW camera (hold RMB to look). Drawn (`F`) = captured mouse.
+Sheathe and you are in WoW. Draw and you are in Elden Ring. Your bag is your class.
+
+Slice 0 is locomotion. WASD is predicted locally. The module is authoritative at 30 Hz. Sheathed = hold RMB to look. Drawn (`F`) = captured mouse.
+
+Vision, inspirations, stack, and slice plan: **[docs/VISION.md](docs/VISION.md)**.
 
 ## One-machine loop
 
@@ -38,6 +42,7 @@ Open a second native or browser client to see another capsule interpolate in.
 ## Layout
 
 ```
+docs/VISION.md  game pillars, stack, what we are not building
 crates/shared   movement math used by module and client
 crates/module   SpacetimeDB WASM module (tables + reducers + tick)
 crates/client   Bevy client (native + WASM/WebGPU)
