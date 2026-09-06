@@ -134,4 +134,12 @@ pub fn play_local_sfx(
         commands.spawn((AudioPlayer::new(handle), settings));
         control.sfx_dummy = 0;
     }
+    if control.sfx_lock != 0 {
+        let acquire = control.sfx_lock > 0;
+        let mut settings = PlaybackSettings::DESPAWN;
+        settings.volume = bevy::audio::Volume::Linear(if acquire { 0.32 } else { 0.22 });
+        settings.speed = if acquire { 1.65 } else { 0.7 };
+        commands.spawn((AudioPlayer::new(sfx.block.clone()), settings));
+        control.sfx_lock = 0;
+    }
 }

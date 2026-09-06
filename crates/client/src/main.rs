@@ -556,6 +556,7 @@ fn read_combat_input(
     local: Query<&Transform, With<LocalPlayer>>,
     remotes: Query<(&Transform, &ServerPose), With<RemotePlayer>>,
 ) {
+    let was_lock = control.lock_on;
     if keys.just_pressed(KeyCode::KeyF) {
         control.drawn = !control.drawn;
         control.sfx_draw = if control.drawn { 1 } else { -1 };
@@ -642,6 +643,9 @@ fn read_combat_input(
         }
     } else {
         control.lock_focus = None;
+    }
+    if control.lock_on != was_lock {
+        control.sfx_lock = if control.lock_on { 1 } else { -1 };
     }
 
     let mut buttons = 0u32;
