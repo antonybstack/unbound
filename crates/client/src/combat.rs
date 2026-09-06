@@ -3,8 +3,8 @@ use bevy_stdb::prelude::*;
 use unbound_shared::{
     ACTION_BLOCK, ACTION_DODGE, ACTION_HEAVY, ACTION_HIT, ACTION_LIGHT, ACTION_NONE, BTN_BLOCK,
     BTN_SPRINT, DODGE_SPEED, GATHER_RANGE, MAX_HP, MAX_STAMINA, PLAYER_HEIGHT,
-    SPRINT_STAMINA_PER_SEC, STAMINA_REGEN_PER_SEC, TICK_HZ, dodge_burst_dt, dodge_dir, dodge_iframe,
-    dummy_club_pitch, dummy_windup_ticks, integrate, loadout, merge_input_buttons,
+    SPRINT_STAMINA_PER_SEC, STAMINA_REGEN_PER_SEC, TICK_HZ, dodge_burst_dt, dodge_dir,
+    dodge_iframe, dummy_club_pitch, dummy_windup_ticks, integrate, loadout, merge_input_buttons,
     predicted_busy_ticks, start_drawn_action, start_gather_action, weapon_extra_rotation,
 };
 
@@ -44,6 +44,11 @@ pub struct WeaponVisual {
     pub loadout: u8,
     pub rest: Transform,
     pub drawn: bool,
+}
+
+#[derive(Component)]
+pub struct ShieldVisual {
+    pub rest: Transform,
 }
 
 #[derive(Component)]
@@ -795,6 +800,7 @@ pub fn refresh_weapon(
     mut state: ResMut<WeaponState>,
     local: Query<Entity, With<LocalPlayer>>,
     weapons: Query<(Entity, &WeaponVisual, Option<&ChildOf>)>,
+    shields: Query<(Entity, &ShieldVisual, Option<&ChildOf>)>,
 ) {
     if state.loadout == control.loadout && state.drawn == control.drawn {
         return;
@@ -809,6 +815,7 @@ pub fn refresh_weapon(
             commands.entity(w).despawn();
         }
     }
+    despawn_child_visuals(&mut commands, local_e, &shields);
     attach_weapon(
         &mut commands,
         &mut meshes,
@@ -825,6 +832,7 @@ pub fn refresh_remote_weapons(
     mut materials: ResMut<Assets<StandardMaterial>>,
     remotes: Query<(Entity, &ServerPose), With<RemotePlayer>>,
     weapons: Query<(Entity, &WeaponVisual, Option<&ChildOf>)>,
+    shields: Query<(Entity, &ShieldVisual, Option<&ChildOf>)>,
 ) {
     for (entity, pose) in &remotes {
         let current = weapons
@@ -839,6 +847,7 @@ pub fn refresh_remote_weapons(
                     commands.entity(w).despawn();
                 }
             }
+            despawn_child_visuals(&mut commands, entity, &shields);
             attach_weapon(
                 &mut commands,
                 &mut meshes,
@@ -901,8 +910,7 @@ fn attach_weapon(
         (1, false) => (
             meshes.add(Cuboid::new(0.08, 0.08, 1.15)),
             Color::srgb(0.45, 0.28, 0.12),
-            Transform::from_xyz(-0.05, 0.32, 0.38)
-                .with_rotation(Quat::from_rotation_x(-1.2)),
+            Transform::from_xyz(-0.05, 0.32, 0.38).with_rotation(Quat::from_rotation_x(-1.2)),
         ),
         (2, true) => (
             meshes.add(Cylinder::new(0.04, 1.4)),
@@ -922,8 +930,7 @@ fn attach_weapon(
         (_, false) => (
             meshes.add(Cuboid::new(0.12, 0.04, 0.9)),
             Color::srgb(0.75, 0.75, 0.8),
-            Transform::from_xyz(0.08, 0.32, 0.36)
-                .with_rotation(Quat::from_rotation_x(-1.25)),
+            Transform::from_xyz(0.08, 0.32, 0.36).with_rotation(Quat::from_rotation_x(-1.25)),
         ),
     };
     let child = commands
@@ -944,6 +951,77 @@ fn attach_weapon(
         ))
         .id();
     commands.entity(parent).add_child(child);
+    if def.id == unbound_shared::LOADOUT_SWORD {
+        attach_shield(commands, meshes, materials, parent, drawn);
+    }
+}
+
+fn attach_shield(
+    commands: &mut Commands,
+    meshes: &mut Assets<Mesh>,
+    materials: &mut Assets<StandardMaterial>,
+    parent: Entity,
+    drawn: bool,
+) {
+    let tf = if drawn {
+        Transform::from_xyz(-0.42, 0.12, -0.18)
+            .with_rotation(Quat::from_rotation_y(1.35) * Quat::from_rotation_x(1.2))
+    } else {
+        Transform::from_xyz(-0.16, 0.18, 0.34).with_rotation(Quat::from_rotation_x(1.15))
+    };
+    let shield = commands
+        .spawn((
+            Mesh3d(meshes.add(Cylinder::new(0.34, 0.07))),
+            MeshMaterial3d(materials.add(StandardMaterial {
+                base_color: Color::srgb(0.42, 0.26, 0.14),
+                perceptual_roughness: 0.85,
+                ..default()
+            })),
+            tf,
+            ShieldVisual { rest: tf },
+        ))
+        .id();
+    commands.entity(parent).add_child(shield);
+}
+
+fn despawn_child_visuals<T: Component>(
+    commands: &mut Commands,
+    parent: Entity,
+    q: &Query<(Entity, &T, Option<&ChildOf>)>,
+) {
+    for (e, _, child_of) in q {
+        if child_of.map(|p| p.parent() == parent).unwrap_or(false) {
+            commands.entity(e).despawn();
+        }
+    }
+}
+
+pub fn pose_shields(
+    control: Res<ControlState>,
+    remotes: Query<(Entity, &ServerPose), With<RemotePlayer>>,
+    local: Query<Entity, With<LocalPlayer>>,
+    mut shields: Query<(&ShieldVisual, &mut Transform, Option<&ChildOf>)>,
+) {
+    let local_e = local.single().ok();
+    for (visual, mut transform, parent) in &mut shields {
+        let Some(parent) = parent else {
+            continue;
+        };
+        let action = if local_e == Some(parent.parent()) {
+            control.pred_action
+        } else if let Some((_, pose)) = remotes.iter().find(|(e, _)| *e == parent.parent()) {
+            pose.action
+        } else {
+            continue;
+        };
+        let lift = if action == ACTION_BLOCK {
+            Transform::from_xyz(0.22, 0.08, -0.28)
+                .with_rotation(Quat::from_rotation_y(-0.55) * Quat::from_rotation_x(-0.35))
+        } else {
+            Transform::IDENTITY
+        };
+        *transform = visual.rest * lift;
+    }
 }
 
 fn spawn_dummy(
