@@ -309,6 +309,28 @@ pub fn dummy_windup_ticks(action: u8) -> u8 {
     }
 }
 
+pub const DUMMY_HEAVY_SCALE_XZ: f32 = 1.12;
+pub const DUMMY_HEAVY_SCALE_Y: f32 = 1.0;
+pub const DUMMY_LIGHT_SCALE_XZ: f32 = 1.05;
+pub const DUMMY_DEAD_SCALE_Y: f32 = 0.22;
+
+/// Capsule scale besides the gold windup color. Heavy puffs xz; light is a
+/// smaller bump. Recover and idle are 1. Dead squash keeps y at 0.22.
+pub fn dummy_body_scale(action: u8, alive: bool) -> (f32, f32, f32) {
+    if !alive {
+        return (1.0, DUMMY_DEAD_SCALE_Y, 1.0);
+    }
+    match action {
+        ACTION_HEAVY => (
+            DUMMY_HEAVY_SCALE_XZ,
+            DUMMY_HEAVY_SCALE_Y,
+            DUMMY_HEAVY_SCALE_XZ,
+        ),
+        ACTION_LIGHT => (DUMMY_LIGHT_SCALE_XZ, 1.0, DUMMY_LIGHT_SCALE_XZ),
+        _ => (1.0, 1.0, 1.0),
+    }
+}
+
 /// Club raise just committed. None while the same windup is still pending.
 pub fn dummy_telegraph_started(
     prev_action: u8,

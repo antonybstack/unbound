@@ -523,6 +523,26 @@ mod tests {
     }
 
     #[test]
+    fn dummy_heavy_puffs_the_capsule() {
+        let (hx, hy, hz) = dummy_body_scale(ACTION_HEAVY, true);
+        assert!((hx - DUMMY_HEAVY_SCALE_XZ).abs() < 1e-5);
+        assert!((hz - hx).abs() < 1e-5);
+        assert!(hx >= 1.08 && hx <= 1.14);
+        assert!((hy - 1.0).abs() < 0.06);
+        let (lx, ly, lz) = dummy_body_scale(ACTION_LIGHT, true);
+        assert!(lx > 1.0 && lx < hx);
+        assert!((ly - 1.0).abs() < 1e-5);
+        assert!((lz - lx).abs() < 1e-5);
+        assert_eq!(dummy_body_scale(ACTION_HIT, true), (1.0, 1.0, 1.0));
+        assert_eq!(dummy_body_scale(ACTION_NONE, true), (1.0, 1.0, 1.0));
+        assert_eq!(
+            dummy_body_scale(ACTION_HEAVY, false),
+            (1.0, DUMMY_DEAD_SCALE_Y, 1.0)
+        );
+        assert!((DUMMY_DEAD_SCALE_Y - 0.22).abs() < 1e-5);
+    }
+
+    #[test]
     fn dummy_telegraph_fires_once_per_windup() {
         assert_eq!(
             dummy_telegraph_started(ACTION_NONE, false, ACTION_LIGHT, true),

@@ -1,15 +1,15 @@
 use bevy::prelude::*;
 use bevy_stdb::prelude::*;
 use unbound_shared::{
-    aim_dir, death_started, dodge_burst_dt, dodge_dir, dummy_club_pitch, dummy_telegraph_started,
-    dummy_windup_ticks, hyperarmor, hyperarmor_flash_emissive, hyperarmor_flash_scale, integrate,
-    invulnerable_for, life_started, loadout, melee_lunge_dt, merge_input_buttons,
-    predicted_busy_ticks, predicted_release_ticks, start_drawn_action, start_gather_action,
-    weapon_extra_rotation, ACTION_BLOCK, ACTION_DEAD, ACTION_DODGE, ACTION_HEAVY, ACTION_HIT,
-    ACTION_LIGHT, ACTION_NONE, BTN_BLOCK, BTN_DODGE, BTN_HEAVY, BTN_LIGHT, BTN_SPRINT, DODGE_SPEED,
-    GATHER_RANGE, HYPERARMOR_FLASH_TIME, MAX_HP, MAX_STAMINA, MOVE_SPEED, PLAYER_HEIGHT,
-    SHOT_CEILING_Y, SHOT_GROUND_Y, SHOT_SPAWN_Y, SPRINT_STAMINA_PER_SEC, STAMINA_REGEN_PER_SEC,
-    TICK_HZ,
+    aim_dir, death_started, dodge_burst_dt, dodge_dir, dummy_body_scale, dummy_club_pitch,
+    dummy_telegraph_started, dummy_windup_ticks, hyperarmor, hyperarmor_flash_emissive,
+    hyperarmor_flash_scale, integrate, invulnerable_for, life_started, loadout, melee_lunge_dt,
+    merge_input_buttons, predicted_busy_ticks, predicted_release_ticks, start_drawn_action,
+    start_gather_action, weapon_extra_rotation, ACTION_BLOCK, ACTION_DEAD, ACTION_DODGE,
+    ACTION_HEAVY, ACTION_HIT, ACTION_LIGHT, ACTION_NONE, BTN_BLOCK, BTN_DODGE, BTN_HEAVY,
+    BTN_LIGHT, BTN_SPRINT, DODGE_SPEED, GATHER_RANGE, HYPERARMOR_FLASH_TIME, MAX_HP, MAX_STAMINA,
+    MOVE_SPEED, PLAYER_HEIGHT, SHOT_CEILING_Y, SHOT_GROUND_Y, SHOT_SPAWN_Y, SPRINT_STAMINA_PER_SEC,
+    STAMINA_REGEN_PER_SEC, TICK_HZ,
 };
 
 use crate::camera::ControlState;
@@ -292,12 +292,12 @@ pub fn interpolate_dummy(
         let target = Vec3::new(pose.x, y, pose.z);
         transform.translation = transform.translation.lerp(target, t);
         transform.rotation = transform.rotation.slerp(Quat::from_rotation_y(pose.yaw), t);
+        let (sx, sy, sz) = dummy_body_scale(pose.action, pose.alive);
+        let mut scale = Vec3::new(sx, sy, sz);
         if pose.alive {
-            transform.scale = Vec3::splat(hyperarmor_flash_scale(flash.t));
-        } else {
-            let down = Vec3::new(1.0, 0.22, 1.0);
-            transform.scale = transform.scale.lerp(down, t);
+            scale *= hyperarmor_flash_scale(flash.t);
         }
+        transform.scale = transform.scale.lerp(scale, t);
     }
 }
 
