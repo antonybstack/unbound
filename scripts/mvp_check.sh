@@ -77,6 +77,12 @@ echo "== bow =="
 bow=$(run_bot --name Archer --token /tmp/unbound-bow.token --mode bow --seconds 8)
 echo "$bow"
 need "ranged_xp" "$(echo "$bow" | field ranged_xp)" gt 0
+need "bow loadout" "$(echo "$bow" | field loadout)" eq 1
+ranged_before=$(echo "$bow" | field ranged_xp)
+again_bow=$(run_bot --name Archer --token /tmp/unbound-bow.token --mode bow --seconds 3)
+echo "$again_bow"
+need "persist ranged_xp" "$(echo "$again_bow" | field ranged_xp)" ge "$ranged_before"
+need "persist bow loadout" "$(echo "$again_bow" | field loadout)" eq 1
 
 echo
 echo "== 1v1 PvP =="

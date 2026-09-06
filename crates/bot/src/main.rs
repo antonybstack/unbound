@@ -107,7 +107,7 @@ fn main() {
     if let Some(me) = conn.try_identity() {
         if let Some(c) = conn.db().character().iter().find(|c| c.identity == me) {
             println!(
-                "RESULT name={} identity={} melee_xp={} ranged_xp={} magic_xp={} defence_xp={} hitpoints_xp={} gather_xp={} min_hp={:.1} saw_self={}",
+                "RESULT name={} identity={} melee_xp={} ranged_xp={} magic_xp={} defence_xp={} hitpoints_xp={} gather_xp={} loadout={} min_hp={:.1} saw_self={}",
                 c.name,
                 identity_short(me),
                 c.melee_xp,
@@ -116,6 +116,7 @@ fn main() {
                 c.defence_xp,
                 c.hitpoints_xp,
                 c.gather_xp,
+                c.loadout,
                 min_hp,
                 saw_self
             );

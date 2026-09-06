@@ -820,6 +820,36 @@ pub fn tick_hit_flash(
     m.base_color = color;
 }
 
+pub fn tick_remote_ghost(
+    remotes: Query<(&ServerPose, &MeshMaterial3d<StandardMaterial>), With<RemotePlayer>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
+    for (pose, mat) in &remotes {
+        let Some(mut m) = materials.get_mut(&mat.0) else {
+            continue;
+        };
+        let ghost = pose.action == ACTION_DODGE
+            && dodge_iframe_for(
+                pose.action_ticks.round().clamp(0.0, 255.0) as u8,
+                pose.loadout,
+            );
+        let mut color = if pose.alive {
+            Color::srgb(0.35, 0.48, 0.62)
+        } else {
+            Color::srgb(0.22, 0.24, 0.28)
+        };
+        if ghost {
+            color = color.mix(&Color::srgb(0.95, 0.95, 1.0), 0.45);
+            color.set_alpha(0.42);
+            m.alpha_mode = AlphaMode::Blend;
+        } else {
+            color.set_alpha(1.0);
+            m.alpha_mode = AlphaMode::Opaque;
+        }
+        m.base_color = color;
+    }
+}
+
 pub fn apply_predicted_starts(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
