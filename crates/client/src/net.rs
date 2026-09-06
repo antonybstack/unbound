@@ -416,6 +416,7 @@ fn spawn_pawn(
                 Transform::from_xyz(0.0, 1.2, 0.0),
                 crate::combat::HpBar {
                     fade: if player.alive { 1.0 } else { 0.0 },
+                    flash: 0.0,
                 },
             ))
             .id();

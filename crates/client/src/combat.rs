@@ -6,7 +6,8 @@ use unbound_shared::{
     hp_bar_tint, hyperarmor, hyperarmor_flash_emissive, hyperarmor_flash_scale, incoming_hit_shake,
     integrate, invulnerable_for, life_started, loadout, melee_lunge_dt, merge_input_buttons,
     nameplate_alpha, node_mesh_scale, node_respawned, node_restore_mix, predicted_busy_ticks,
-    predicted_release_ticks, start_drawn_action, start_gather_action, weapon_extra_rotation,
+    predicted_release_ticks, start_drawn_action, start_gather_action, wanderer_hp_bar_hit,
+    wanderer_hp_bar_tint, weapon_extra_rotation,
     ACTION_BLOCK, ACTION_DEAD, ACTION_DODGE, ACTION_HEAVY, ACTION_HIT, ACTION_LIGHT, ACTION_NONE,
     BTN_BLOCK, BTN_DODGE, BTN_HEAVY, BTN_LIGHT, BTN_SPRINT, DODGE_SPEED, GATHER_RANGE,
     HP_FLASH_TIME, HYPERARMOR_FLASH_TIME, MAX_HP, MAX_STAMINA, MOVE_SPEED, PLAYER_HEIGHT,
@@ -22,7 +23,7 @@ use crate::module_bindings::{
     CharacterTableAccess, CombatEvent, Dummy, DummyTableAccess, GatherNode, GatherNodeTableAccess,
     Player, PlayerTableAccess, Projectile, ProjectileTableAccess,
 };
-use crate::net::{LocalPlayer, RemotePlayer, ServerPose};
+use crate::net::{LocalPlayer, NetworkedIdentity, RemotePlayer, ServerPose};
 use crate::{MainCamera, StdbConn, StdbSubs, SubKey};
 use spacetimedb_sdk::Table;
 
@@ -32,6 +33,7 @@ pub struct DummyPawn;
 #[derive(Component)]
 pub struct HpBar {
     pub fade: f32,
+    pub flash: f32,
 }
 
 #[derive(Component)]
@@ -376,6 +378,7 @@ pub fn pose_hp_bars(
             0.05
         };
         bar.fade = nameplate_alpha(alive, bar.fade, dt);
+        bar.flash = (bar.flash - dt).max(0.0);
         *tf = Transform::from_xyz(0.0, 1.28, 0.0)
             .looking_at(cam_local, Vec3::Y)
             .with_scale(Vec3::new(ratio, 1.0, 1.0));
@@ -386,7 +389,10 @@ pub fn pose_hp_bars(
                 color.set_alpha(bar.fade);
                 m.base_color = color;
             } else {
-                m.base_color.set_alpha(bar.fade);
+                let (r, g, b) = wanderer_hp_bar_tint(bar.flash);
+                let mut color = Color::srgb(r, g, b);
+                color.set_alpha(bar.fade);
+                m.base_color = color;
             }
             m.alpha_mode = if bar.fade < 0.999 {
                 AlphaMode::Blend
@@ -843,6 +849,8 @@ pub fn flash_hits(
     mut events: ReadInsertMessage<CombatEvent>,
     mut local: Query<&mut Transform, With<LocalPlayer>>,
     dummy: Query<&DummyPose, With<DummyPawn>>,
+    remotes: Query<&NetworkedIdentity, With<RemotePlayer>>,
+    mut bars: Query<(&ChildOf, &mut HpBar)>,
     conn: Option<Res<StdbConn>>,
     mut flash: ResMut<HitFlash>,
     mut armor: ResMut<DummyArmorFlash>,
@@ -881,6 +889,16 @@ pub fn flash_hits(
         }
         if dummy_hp_bar_hit(row.kind, row.target_is_dummy) {
             dummy_hp.t = HP_FLASH_TIME;
+        }
+        if wanderer_hp_bar_hit(row.kind, row.target_is_dummy) {
+            for (parent, mut bar) in &mut bars {
+                let Ok(id) = remotes.get(parent.parent()) else {
+                    continue;
+                };
+                if id.identity == row.target {
+                    bar.flash = HP_FLASH_TIME;
+                }
+            }
         }
         if row.kind == 1 && row.target_is_dummy {
             if let Ok(pose) = dummy.single() {
@@ -1703,6 +1721,7 @@ fn spawn_dummy(
             )),
             HpBar {
                 fade: if dummy.alive { 1.0 } else { 0.0 },
+                flash: 0.0,
             },
         ))
         .id();

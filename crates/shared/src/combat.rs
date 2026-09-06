@@ -750,9 +750,24 @@ pub fn hp_bar_tint(t: f32) -> (f32, f32, f32) {
     )
 }
 
-/// Dummy HUD and world bars flash on a hit or kill. Player chips use HitFlash.
+/// Dummy HUD and world bars flash on a hit or kill. Local HUD uses HitFlash.
 pub fn dummy_hp_bar_hit(kind: u8, target_is_dummy: bool) -> bool {
     target_is_dummy && (kind == 1 || kind == 2)
+}
+
+/// Other wanderer's world bar. Dummy uses dummy_hp_bar_hit; your HUD uses HitFlash.
+pub fn wanderer_hp_bar_hit(kind: u8, target_is_dummy: bool) -> bool {
+    !target_is_dummy && (kind == 1 || kind == 2)
+}
+
+/// Rest steel-blue; flash goes white so a PvP chip reads on the other wanderer's bar.
+pub fn wanderer_hp_bar_tint(t: f32) -> (f32, f32, f32) {
+    let k = hp_bar_flash(t);
+    (
+        0.25 + k * (1.0 - 0.25),
+        0.55 + k * (0.95 - 0.55),
+        0.85 + k * (0.92 - 0.85),
+    )
 }
 
 /// 1 at skill-up, 0 at rest. Quadratic ease so the XP bar snaps gold then settles.

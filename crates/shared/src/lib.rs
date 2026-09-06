@@ -976,6 +976,28 @@ mod tests {
     }
 
     #[test]
+    fn wanderer_hp_bar_flashes_when_a_chip_lands() {
+        assert!(wanderer_hp_bar_hit(1, false));
+        assert!(wanderer_hp_bar_hit(2, false));
+        assert!(!wanderer_hp_bar_hit(1, true));
+        assert!(!wanderer_hp_bar_hit(2, true));
+        assert!(!wanderer_hp_bar_hit(3, false));
+        assert!(!wanderer_hp_bar_hit(5, false));
+        assert!(!wanderer_hp_bar_hit(6, false));
+        let (rr, rg, rb) = wanderer_hp_bar_tint(0.0);
+        assert!((rr - 0.25).abs() < 1e-4);
+        assert!((rg - 0.55).abs() < 1e-4);
+        assert!((rb - 0.85).abs() < 1e-4);
+        let (kr, kg, kb) = wanderer_hp_bar_tint(HP_FLASH_TIME);
+        assert!(kr > rr && kg > rg && kb > rb);
+        assert!(kr >= 0.98 && kg >= 0.93 && kb >= 0.90);
+        let (mr, mg, mb) = wanderer_hp_bar_tint(HP_FLASH_TIME * 0.5);
+        assert!(mr > rr && mr < kr);
+        assert!(mg > rg && mg < kg);
+        assert!(mb > rb && mb < kb);
+    }
+
+    #[test]
     fn gather_hint_pulses_when_sheathed_range_enters() {
         assert!((GATHER_HINT_FLASH_TIME - 0.2).abs() < 1e-4);
         assert!(gather_hint_in_range(true, GATHER_RANGE));
