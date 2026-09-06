@@ -15,3 +15,9 @@ log = "0.4"
 bevy = "0.19"
 bevy_stdb = "0.13"
 unbound-shared = { path = "crates/shared" }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+opt-level = "s"
+strip = true
