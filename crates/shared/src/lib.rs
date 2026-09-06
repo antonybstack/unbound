@@ -645,6 +645,88 @@ mod tests {
     }
 
     #[test]
+    fn remote_melee_lunge_dust_fires_once_on_sword_step_in() {
+        assert!(remote_melee_lunge_dust(
+            ACTION_NONE,
+            ACTION_LIGHT,
+            false,
+            0.0
+        ));
+        assert!(remote_melee_lunge_dust(
+            ACTION_NONE,
+            ACTION_HEAVY,
+            false,
+            REMOTE_DODGE_DUST_RANGE
+        ));
+        assert!(remote_melee_lunge_dust(
+            ACTION_DODGE,
+            ACTION_LIGHT,
+            false,
+            1.0
+        ));
+        assert!(remote_melee_lunge_dust(
+            ACTION_HEAVY,
+            ACTION_LIGHT,
+            false,
+            1.0
+        ));
+        assert!(!remote_melee_lunge_dust(
+            ACTION_LIGHT,
+            ACTION_LIGHT,
+            false,
+            1.0
+        ));
+        assert!(!remote_melee_lunge_dust(
+            ACTION_HEAVY,
+            ACTION_HEAVY,
+            false,
+            1.0
+        ));
+        assert!(!remote_melee_lunge_dust(
+            ACTION_NONE,
+            ACTION_LIGHT,
+            true,
+            1.0
+        ));
+        assert!(!remote_melee_lunge_dust(
+            ACTION_NONE,
+            ACTION_HEAVY,
+            true,
+            1.0
+        ));
+        assert!(!remote_melee_lunge_dust(
+            ACTION_NONE,
+            ACTION_DODGE,
+            false,
+            1.0
+        ));
+        assert!(!remote_melee_lunge_dust(
+            ACTION_NONE,
+            ACTION_LIGHT,
+            false,
+            REMOTE_DODGE_DUST_RANGE + 0.01
+        ));
+        let light = start_drawn_action(ACTION_NONE, LOADOUT_SWORD, LOADOUT_SWORD, 100.0, BTN_LIGHT)
+            .expect("light");
+        assert!(remote_melee_lunge_dust(
+            ACTION_NONE,
+            light.action,
+            loadout(light.loadout).is_projectile,
+            0.0
+        ));
+        let bow = start_drawn_action(ACTION_NONE, LOADOUT_BOW, LOADOUT_BOW, 100.0, BTN_LIGHT)
+            .expect("bow");
+        assert!(!remote_melee_lunge_dust(
+            ACTION_NONE,
+            bow.action,
+            loadout(bow.loadout).is_projectile,
+            0.0
+        ));
+        let radius = melee_lunge_dust_radius(ACTION_HEAVY, false);
+        assert!(radius > melee_lunge_dust_radius(ACTION_LIGHT, false));
+    }
+
+    #[test]
     fn death_thud_fires_once_when_alive_falls() {
         assert!(death_started(true, false));
         assert!(!death_started(false, false));

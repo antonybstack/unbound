@@ -6,8 +6,9 @@ use unbound_shared::{
     hp_bar_tint, hyperarmor, hyperarmor_flash_emissive, hyperarmor_flash_scale, incoming_hit_shake,
     integrate, invulnerable_for, life_started, loadout, melee_lunge_dt, melee_lunge_dust_radius,
     merge_input_buttons, nameplate_alpha, node_mesh_scale, node_respawned, node_restore_mix,
-    predicted_busy_ticks, predicted_release_ticks, remote_dodge_dust, start_drawn_action,
-    start_gather_action, wanderer_hp_bar_hit, wanderer_hp_bar_tint, weapon_extra_rotation,
+    predicted_busy_ticks, predicted_release_ticks, remote_dodge_dust, remote_melee_lunge_dust,
+    start_drawn_action, start_gather_action, wanderer_hp_bar_hit, wanderer_hp_bar_tint,
+    weapon_extra_rotation,
     ACTION_BLOCK, ACTION_DEAD, ACTION_DODGE, ACTION_HEAVY, ACTION_HIT, ACTION_LIGHT, ACTION_NONE,
     BTN_BLOCK, BTN_DODGE, BTN_HEAVY, BTN_LIGHT, BTN_SPRINT, DODGE_SPEED, GATHER_RANGE,
     HP_FLASH_TIME, HYPERARMOR_FLASH_TIME, MAX_HP, MAX_STAMINA, MOVE_SPEED, PLAYER_HEIGHT,
@@ -1092,6 +1093,16 @@ pub fn puff_remote_dodge(
             .unwrap_or(0.0);
         if remote_dodge_dust(step.last_puff_action, pose.action, range) {
             spawn_dust(&mut commands, &mut meshes, &mut materials, tf.translation);
+        }
+        let projectile = loadout(pose.loadout).is_projectile;
+        if remote_melee_lunge_dust(step.last_puff_action, pose.action, projectile, range) {
+            spawn_dust_sized(
+                &mut commands,
+                &mut meshes,
+                &mut materials,
+                tf.translation,
+                melee_lunge_dust_radius(pose.action, projectile),
+            );
         }
         step.last_puff_action = pose.action;
     }

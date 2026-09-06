@@ -446,6 +446,21 @@ pub fn remote_dodge_dust(prev_action: u8, new_action: u8, range: f32) -> bool {
     dodge_started(prev_action, new_action) && range <= REMOTE_DODGE_DUST_RANGE
 }
 
+/// Other wanderer's feet on a melee step-in. Local already puffs in
+/// apply_predicted_starts; bows and staffs stay planted; a far swing is a ghost.
+/// Same mute as remote dodge. Recover ticks keep LIGHT/HEAVY so the rising
+/// edge is prev != new, not pending_hit.
+pub fn remote_melee_lunge_dust(
+    prev_action: u8,
+    new_action: u8,
+    is_projectile: bool,
+    range: f32,
+) -> bool {
+    melee_lunge_dust(new_action, is_projectile)
+        && prev_action != new_action
+        && range <= REMOTE_DODGE_DUST_RANGE
+}
+
 /// Body just dropped. True only on the alive true→false edge so respawn and
 /// staying dead do not re-fire.
 pub fn death_started(prev_alive: bool, new_alive: bool) -> bool {
