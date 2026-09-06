@@ -274,6 +274,7 @@ pub const CAM_SHEATHED: f32 = 6.8;
 pub const CAM_DRAWN: f32 = 4.35;
 pub const CAM_LOCK: f32 = 5.15;
 pub const CAM_SPRINT_EXTRA: f32 = 0.55;
+pub const CAM_DODGE_EXTRA: f32 = 0.45;
 pub const CAM_LOCK_MIX: f32 = 0.32;
 pub const CAM_SHOULDER: f32 = 0.42;
 pub const CAM_SHAKE_TIME: f32 = 0.16;
@@ -419,7 +420,7 @@ pub fn dummy_strafe_dir(pocket: f32, cooldown: u8) -> f32 {
     }
 }
 
-pub fn camera_distance(drawn: bool, lock_on: bool, sprinting: bool) -> f32 {
+pub fn camera_distance(drawn: bool, lock_on: bool, sprinting: bool, dodging: bool) -> f32 {
     let base = if lock_on {
         CAM_LOCK
     } else if drawn {
@@ -427,11 +428,14 @@ pub fn camera_distance(drawn: bool, lock_on: bool, sprinting: bool) -> f32 {
     } else {
         CAM_SHEATHED
     };
-    if sprinting {
-        base + CAM_SPRINT_EXTRA
+    let extra = if dodging {
+        CAM_DODGE_EXTRA
+    } else if sprinting {
+        CAM_SPRINT_EXTRA
     } else {
-        base
-    }
+        0.0
+    };
+    base + extra
 }
 
 pub fn lock_focus_xz(px: f32, pz: f32, tx: f32, tz: f32, mix: f32) -> (f32, f32) {

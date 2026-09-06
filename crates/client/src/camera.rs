@@ -185,7 +185,8 @@ pub fn update_camera(
     let sprinting = (control.buttons & unbound_shared::BTN_SPRINT) != 0
         && control.pred_stamina > 1.0
         && can_step;
-    let want = camera_distance(control.drawn, control.lock_on, sprinting);
+    let dodging = control.pred_action == ACTION_DODGE;
+    let want = camera_distance(control.drawn, control.lock_on, sprinting, dodging);
     let blend = (8.0 * dt).min(1.0);
     control.cam_dist += (want - control.cam_dist) * blend;
     control.shake = (control.shake - dt).max(0.0);
