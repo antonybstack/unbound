@@ -469,6 +469,51 @@ mod tests {
     }
 
     #[test]
+    fn melee_lunge_dust_puffs_on_sword_step_in() {
+        assert!(melee_lunge_dust(ACTION_LIGHT, false));
+        assert!(melee_lunge_dust(ACTION_HEAVY, false));
+        assert!(!melee_lunge_dust(ACTION_LIGHT, true));
+        assert!(!melee_lunge_dust(ACTION_HEAVY, true));
+        assert!(!melee_lunge_dust(ACTION_DODGE, false));
+        assert!(!melee_lunge_dust(ACTION_BLOCK, false));
+        assert!(!melee_lunge_dust(ACTION_NONE, false));
+        let light = start_drawn_action(ACTION_NONE, LOADOUT_SWORD, LOADOUT_SWORD, 100.0, BTN_LIGHT)
+            .expect("light");
+        assert!(light.pending_hit);
+        assert!(melee_lunge_dust(
+            light.action,
+            loadout(light.loadout).is_projectile
+        ));
+        let heavy = start_drawn_action(ACTION_NONE, LOADOUT_SWORD, LOADOUT_SWORD, 100.0, BTN_HEAVY)
+            .expect("heavy");
+        assert!(heavy.pending_hit);
+        assert!(melee_lunge_dust(
+            heavy.action,
+            loadout(heavy.loadout).is_projectile
+        ));
+        let bow = start_drawn_action(ACTION_NONE, LOADOUT_BOW, LOADOUT_BOW, 100.0, BTN_LIGHT)
+            .expect("bow");
+        assert!(bow.pending_hit);
+        assert!(!melee_lunge_dust(
+            bow.action,
+            loadout(bow.loadout).is_projectile
+        ));
+        let staff = start_drawn_action(ACTION_NONE, LOADOUT_STAFF, LOADOUT_STAFF, 100.0, BTN_HEAVY)
+            .expect("staff");
+        assert!(staff.pending_hit);
+        assert!(!melee_lunge_dust(
+            staff.action,
+            loadout(staff.loadout).is_projectile
+        ));
+        let lr = melee_lunge_dust_radius(ACTION_LIGHT, false);
+        let hr = melee_lunge_dust_radius(ACTION_HEAVY, false);
+        assert!((lr - 0.45).abs() < 1e-5);
+        assert!(hr > lr);
+        assert_eq!(melee_lunge_dust_radius(ACTION_LIGHT, true), 0.0);
+        assert_eq!(melee_lunge_dust_radius(ACTION_DODGE, false), 0.0);
+    }
+
+    #[test]
     fn dodge_costs_stamina_and_defaults_forward() {
         let start = start_drawn_action(ACTION_NONE, LOADOUT_SWORD, LOADOUT_SWORD, 100.0, BTN_DODGE)
             .expect("dodge");

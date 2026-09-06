@@ -978,6 +978,24 @@ pub fn melee_lunge_dt(action: u8, is_projectile: bool) -> f32 {
     }
 }
 
+/// Feet kick dirt when a melee swing steps in. Bows and staffs stay planted
+/// so a shot does not puff. Recover ticks never re-enter start_drawn_action.
+pub fn melee_lunge_dust(action: u8, is_projectile: bool) -> bool {
+    melee_lunge_dt(action, is_projectile) > 0.0
+}
+
+/// Disk radius at the feet. Heavies kick a slightly wider puff than a light
+/// or dodge; planted shots are 0.
+pub fn melee_lunge_dust_radius(action: u8, is_projectile: bool) -> f32 {
+    if !melee_lunge_dust(action, is_projectile) {
+        return 0.0;
+    }
+    match action {
+        ACTION_HEAVY => 0.58,
+        _ => 0.45,
+    }
+}
+
 /// Ticks left on a predicted attack when the projectile/melee should release.
 pub fn predicted_release_ticks(action: u8, loadout_id: u8) -> u8 {
     let def = loadout(loadout_id);

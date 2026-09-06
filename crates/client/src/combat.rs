@@ -4,10 +4,10 @@ use unbound_shared::{
     aim_dir, death_started, dodge_burst_dt, dodge_dir, dummy_body_scale, dummy_club_pitch,
     dummy_heavy_slammed, dummy_hp_bar_hit, dummy_telegraph_started, dummy_windup_ticks,
     hp_bar_tint, hyperarmor, hyperarmor_flash_emissive, hyperarmor_flash_scale, incoming_hit_shake,
-    integrate, invulnerable_for, life_started, loadout, melee_lunge_dt, merge_input_buttons,
-    nameplate_alpha, node_mesh_scale, node_respawned, node_restore_mix, predicted_busy_ticks,
-    predicted_release_ticks, remote_dodge_dust, start_drawn_action, start_gather_action,
-    wanderer_hp_bar_hit, wanderer_hp_bar_tint, weapon_extra_rotation,
+    integrate, invulnerable_for, life_started, loadout, melee_lunge_dt, melee_lunge_dust_radius,
+    merge_input_buttons, nameplate_alpha, node_mesh_scale, node_respawned, node_restore_mix,
+    predicted_busy_ticks, predicted_release_ticks, remote_dodge_dust, start_drawn_action,
+    start_gather_action, wanderer_hp_bar_hit, wanderer_hp_bar_tint, weapon_extra_rotation,
     ACTION_BLOCK, ACTION_DEAD, ACTION_DODGE, ACTION_HEAVY, ACTION_HIT, ACTION_LIGHT, ACTION_NONE,
     BTN_BLOCK, BTN_DODGE, BTN_HEAVY, BTN_LIGHT, BTN_SPRINT, DODGE_SPEED, GATHER_RANGE,
     HP_FLASH_TIME, HYPERARMOR_FLASH_TIME, MAX_HP, MAX_STAMINA, MOVE_SPEED, PLAYER_HEIGHT,
@@ -1185,9 +1185,17 @@ pub fn apply_predicted_starts(
             transform.translation.z = z;
         }
     } else if start.pending_hit {
-        let dt = melee_lunge_dt(start.action, loadout(start.loadout).is_projectile);
+        let projectile = loadout(start.loadout).is_projectile;
+        let dt = melee_lunge_dt(start.action, projectile);
         if dt > 0.0 {
             if let Ok(mut transform) = local.single_mut() {
+                spawn_dust_sized(
+                    &mut commands,
+                    &mut meshes,
+                    &mut materials,
+                    transform.translation,
+                    melee_lunge_dust_radius(start.action, projectile),
+                );
                 let (x, z) = integrate(
                     transform.translation.x,
                     transform.translation.z,
@@ -1255,8 +1263,18 @@ fn spawn_dust(
     materials: &mut Assets<StandardMaterial>,
     at: Vec3,
 ) {
+    spawn_dust_sized(commands, meshes, materials, at, 0.45);
+}
+
+fn spawn_dust_sized(
+    commands: &mut Commands,
+    meshes: &mut Assets<Mesh>,
+    materials: &mut Assets<StandardMaterial>,
+    at: Vec3,
+    radius: f32,
+) {
     commands.spawn((
-        Mesh3d(meshes.add(Cylinder::new(0.45, 0.04))),
+        Mesh3d(meshes.add(Cylinder::new(radius, 0.04))),
         MeshMaterial3d(materials.add(StandardMaterial {
             base_color: Color::srgba(0.62, 0.55, 0.4, 0.55),
             alpha_mode: AlphaMode::Blend,
