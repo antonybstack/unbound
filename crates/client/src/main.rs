@@ -32,7 +32,9 @@ use crate::net::{
     send_input, spawn_pawns_from_cache, tick_remote_pose,
 };
 use crate::persist::persist_on_connect;
-use crate::sfx::{load_sfx, play_combat_sfx, play_local_sfx, tick_remote_steps};
+use crate::sfx::{
+    load_sfx, play_combat_sfx, play_local_sfx, play_remote_shot_sfx, tick_remote_steps,
+};
 
 pub type StdbConn = StdbConnection<DbConnection>;
 pub type StdbSubs = StdbSubscriptions<SubKey, RemoteModule>;
@@ -176,6 +178,7 @@ fn main() {
                 update_hotbar,
                 play_combat_sfx,
                 play_local_sfx,
+                play_remote_shot_sfx,
                 tick_remote_steps,
             )
                 .chain(),

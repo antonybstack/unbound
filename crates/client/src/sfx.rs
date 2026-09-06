@@ -3,7 +3,7 @@ use bevy_stdb::prelude::*;
 use unbound_shared::{ACTION_DEAD, ACTION_DODGE, move_lock};
 
 use crate::StdbConn;
-use crate::module_bindings::CombatEvent;
+use crate::module_bindings::{CombatEvent, Projectile};
 use crate::net::{LocalPlayer, RemotePlayer, RemoteStep, ServerPose};
 
 #[derive(Resource)]
@@ -147,6 +147,31 @@ pub fn play_local_sfx(
         commands.spawn((AudioPlayer::new(sfx.block.clone()), settings));
         control.sfx_lock = 0;
     }
+    if control.sfx_shot != 0 {
+        play_shot_whoosh(&mut commands, &sfx, control.sfx_shot == 2);
+        control.sfx_shot = 0;
+    }
+}
+
+/// Server bolts from anyone else. Local predicted shots already whooshed at spawn.
+pub fn play_remote_shot_sfx(
+    mut commands: Commands,
+    sfx: Option<Res<Sfx>>,
+    mut inserts: ReadInsertMessage<Projectile>,
+    conn: Option<Res<StdbConn>>,
+) {
+    let Some(sfx) = sfx else {
+        return;
+    };
+    let Some(me) = conn.and_then(|c| c.try_identity()) else {
+        return;
+    };
+    for msg in inserts.read() {
+        if msg.row.owner == me {
+            continue;
+        }
+        play_shot_whoosh(&mut commands, &sfx, msg.row.skill == 2);
+    }
 }
 
 const REMOTE_WALK_SPEED: f32 = 1.5;
@@ -237,6 +262,19 @@ pub fn tick_remote_steps(
             base * 0.7 * atten,
         );
     }
+}
+
+fn play_shot_whoosh(commands: &mut Commands, sfx: &Sfx, staff: bool) {
+    let handle = if staff {
+        sfx.heavy.clone()
+    } else {
+        sfx.dodge.clone()
+    };
+    let mut settings = PlaybackSettings::DESPAWN;
+    // Bow: higher/quieter. Staff: lower/thicker. Reuse swing samples, pitched.
+    settings.volume = bevy::audio::Volume::Linear(if staff { 0.36 } else { 0.2 });
+    settings.speed = if staff { 0.68 } else { 1.75 };
+    commands.spawn((AudioPlayer::new(handle), settings));
 }
 
 fn play_foot(commands: &mut Commands, handle: Handle<AudioSource>, sprint: bool, volume: f32) {

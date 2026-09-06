@@ -1139,6 +1139,8 @@ pub fn spawn_predicted_shots(
         true,
         0,
     );
+    // Latch once at release; pred_shot stays true through windup without retriggering.
+    control.sfx_shot = skill;
     control.pred_shot = false;
 }
 
