@@ -1,13 +1,13 @@
 use bevy::prelude::*;
 use bevy_stdb::prelude::*;
 use unbound_shared::{
-    ACTION_DEAD, ACTION_DODGE, ACTION_HEAVY, LOADOUT_BOW, LOADOUT_STAFF, dummy_telegraph_started,
-    move_lock,
+    dummy_telegraph_started, move_lock, ACTION_DEAD, ACTION_DODGE, ACTION_HEAVY, LOADOUT_BOW,
+    LOADOUT_STAFF,
 };
 
-use crate::StdbConn;
 use crate::module_bindings::{CombatEvent, Projectile};
 use crate::net::{LocalPlayer, RemotePlayer, RemoteStep, ServerPose};
+use crate::StdbConn;
 
 #[derive(Resource)]
 pub struct Sfx {
@@ -146,6 +146,14 @@ pub fn play_local_sfx(
         settings.speed = if heavy { 0.62 } else { 0.95 };
         commands.spawn((AudioPlayer::new(handle), settings));
         control.sfx_dummy = 0;
+    }
+    if control.sfx_death {
+        // EVT_KILL already stings attacker/target. Body going down was silent.
+        let mut settings = PlaybackSettings::DESPAWN;
+        settings.volume = bevy::audio::Volume::Linear(0.52);
+        settings.speed = 0.55;
+        commands.spawn((AudioPlayer::new(sfx.brk.clone()), settings));
+        control.sfx_death = false;
     }
     if control.sfx_lock != 0 {
         let acquire = control.sfx_lock > 0;

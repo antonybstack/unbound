@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use bevy_stdb::prelude::*;
 use unbound_shared::{
-    aim_dir, dodge_burst_dt, dodge_dir, dummy_club_pitch, dummy_telegraph_started,
+    aim_dir, death_started, dodge_burst_dt, dodge_dir, dummy_club_pitch, dummy_telegraph_started,
     dummy_windup_ticks, integrate, invulnerable_for, loadout, melee_lunge_dt, merge_input_buttons,
     predicted_busy_ticks, predicted_release_ticks, start_drawn_action, start_gather_action,
     weapon_extra_rotation, ACTION_BLOCK, ACTION_DEAD, ACTION_DODGE, ACTION_HEAVY, ACTION_HIT,
@@ -222,6 +222,9 @@ pub fn sync_dummy(
                 msg.new.pending_hit,
             ) {
                 control.sfx_dummy = if kind == ACTION_HEAVY { 2 } else { 1 };
+            }
+            if death_started(pose.alive, msg.new.alive) {
+                control.sfx_death = true;
             }
             pose.x = msg.new.x;
             pose.z = msg.new.z;

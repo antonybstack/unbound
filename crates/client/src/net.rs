@@ -1,13 +1,13 @@
 use bevy::prelude::*;
 use bevy_stdb::prelude::*;
 use unbound_shared::{
-    ACTION_DEAD, ACTION_DODGE, ACTION_HIT, ACTION_NONE, ACTION_SPAWN, BTN_SPRINT, DODGE_SPEED,
-    INPUT_SEND_HZ, MOVE_SPEED, PLAYER_HEIGHT, RECONCILE_SNAP, SPRINT_SPEED, TICK_HZ, integrate,
-    merge_input_buttons, move_lock,
+    death_started, integrate, merge_input_buttons, move_lock, ACTION_DEAD, ACTION_DODGE,
+    ACTION_HIT, ACTION_NONE, ACTION_SPAWN, BTN_SPRINT, DODGE_SPEED, INPUT_SEND_HZ, MOVE_SPEED,
+    PLAYER_HEIGHT, RECONCILE_SNAP, SPRINT_SPEED, TICK_HZ,
 };
 
 use crate::camera::ControlState;
-use crate::module_bindings::{Player, PlayerTableAccess, set_input_reducer::set_input};
+use crate::module_bindings::{set_input_reducer::set_input, Player, PlayerTableAccess};
 use crate::{StdbCmds, StdbConn};
 use spacetimedb_sdk::Table;
 
@@ -192,6 +192,9 @@ pub fn apply_player_updates(
         for (id, mut pose, local, mut transform) in &mut players {
             if id.identity != msg.new.identity {
                 continue;
+            }
+            if death_started(pose.alive, msg.new.alive) {
+                control.sfx_death = true;
             }
             pose.apply_row(&msg.new);
             if local.is_some() {

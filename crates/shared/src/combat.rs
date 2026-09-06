@@ -319,6 +319,12 @@ pub fn dummy_telegraph_started(
     Some(new_action)
 }
 
+/// Body just dropped. True only on the alive true→false edge so respawn and
+/// staying dead do not re-fire.
+pub fn death_started(prev_alive: bool, new_alive: bool) -> bool {
+    prev_alive && !new_alive
+}
+
 /// +1 chase, 0 hold the pocket, -1 step back. Dummy should not glue to the player.
 pub fn dummy_move_dir(dist: f32) -> f32 {
     if dist > DUMMY_APPROACH {

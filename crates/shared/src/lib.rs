@@ -544,6 +544,14 @@ mod tests {
     }
 
     #[test]
+    fn death_thud_fires_once_when_alive_falls() {
+        assert!(death_started(true, false));
+        assert!(!death_started(false, false));
+        assert!(!death_started(false, true));
+        assert!(!death_started(true, true));
+    }
+
+    #[test]
     fn gather_requires_range_and_button() {
         assert!(start_gather_action(ACTION_NONE, BTN_INTERACT, false).is_none());
         let start = start_gather_action(ACTION_NONE, BTN_INTERACT, true).unwrap();
