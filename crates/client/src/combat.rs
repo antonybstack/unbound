@@ -2,10 +2,10 @@ use bevy::prelude::*;
 use bevy_stdb::prelude::*;
 use unbound_shared::{
     aim_dir, death_started, dodge_burst_dt, dodge_dir, dummy_body_scale, dummy_club_pitch,
-    dummy_heavy_slammed, dummy_hp_bar_hit, dummy_telegraph_started, dummy_windup_ticks, hp_bar_tint,
-    hyperarmor, hyperarmor_flash_emissive, hyperarmor_flash_scale, incoming_hit_shake, integrate,
-    invulnerable_for, life_started, loadout, melee_lunge_dt, merge_input_buttons, nameplate_alpha,
-    node_mesh_scale, node_respawned, node_restore_mix, predicted_busy_ticks,
+    dummy_heavy_slammed, dummy_hp_bar_hit, dummy_telegraph_started, dummy_windup_ticks,
+    hp_bar_tint, hyperarmor, hyperarmor_flash_emissive, hyperarmor_flash_scale, incoming_hit_shake,
+    integrate, invulnerable_for, life_started, loadout, melee_lunge_dt, merge_input_buttons,
+    nameplate_alpha, node_mesh_scale, node_respawned, node_restore_mix, predicted_busy_ticks,
     predicted_release_ticks, start_drawn_action, start_gather_action, weapon_extra_rotation,
     ACTION_BLOCK, ACTION_DEAD, ACTION_DODGE, ACTION_HEAVY, ACTION_HIT, ACTION_LIGHT, ACTION_NONE,
     BTN_BLOCK, BTN_DODGE, BTN_HEAVY, BTN_LIGHT, BTN_SPRINT, DODGE_SPEED, GATHER_RANGE,
@@ -140,6 +140,11 @@ pub struct DummyArmorFlash {
 
 #[derive(Resource, Default)]
 pub struct DummyHpFlash {
+    pub t: f32,
+}
+
+#[derive(Resource, Default)]
+pub struct XpBarFlash {
     pub t: f32,
 }
 
@@ -685,6 +690,7 @@ pub fn sync_nodes(
 pub fn sync_vitals(
     mut vitals: ResMut<LocalVitals>,
     mut control: ResMut<ControlState>,
+    mut xp_flash: ResMut<XpBarFlash>,
     conn: Option<Res<StdbConn>>,
     mut characters: ReadInsertMessage<Character>,
     mut char_updates: ReadUpdateMessage<Character>,
@@ -729,15 +735,18 @@ pub fn sync_vitals(
 
     let cam = camera.single().ok();
     let me_pos = local.single().ok().map(|t| t.translation);
-    let bump = |old: u8, xp: u64| -> (u8, Option<u8>) {
-        let new = unbound_shared::skill_level(xp);
-        (new, (new > old).then_some(new))
-    };
     let mut apply_one = |c: &Character| {
         if c.identity != me {
             return;
         }
         let primed = vitals.skills_primed;
+        let bump = |old: u8, xp: u64| -> (u8, Option<u8>) {
+            let new = unbound_shared::skill_level(xp);
+            (
+                new,
+                unbound_shared::xp_bar_levelled(primed, old, new).then_some(new),
+            )
+        };
         vitals.name = c.name.clone();
         let (melee, up_m) = bump(vitals.melee, c.melee_xp);
         let (ranged, up_r) = bump(vitals.ranged, c.ranged_xp);
@@ -758,9 +767,6 @@ pub fn sync_vitals(
         vitals.hitpoints_xp = c.hitpoints_xp;
         vitals.gather_xp = c.gather_xp;
         vitals.skills_primed = true;
-        if !primed {
-            return;
-        }
         let ups = [
             (unbound_shared::SKILL_MELEE, up_m),
             (unbound_shared::SKILL_RANGED, up_r),
@@ -772,6 +778,7 @@ pub fn sync_vitals(
         for (skill, up) in ups {
             let Some(lvl) = up else { continue };
             control.sfx_level = true;
+            xp_flash.t = unbound_shared::XP_FLASH_TIME;
             let text = format!("{} {}", unbound_shared::skill_label(skill), lvl);
             vitals.log = text.clone();
             if let (Some((cam, cam_tf)), Some(pos)) = (cam, me_pos) {

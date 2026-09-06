@@ -16,7 +16,7 @@ use unbound_shared::{
 use crate::camera::{ControlState, LockReticle, update_camera, update_cursor};
 use crate::combat::{
     DummyArmorFlash, DummyHpFlash, DummyPawn, DummyPose, GatherHintFlash, HitFlash, LocalVitals,
-    StamFlash, WeaponState,
+    StamFlash, WeaponState, XpBarFlash,
     apply_predicted_starts, flash_hits, fly_predicted_shots, fly_shots, interpolate_dummy,
     pose_dummy_club, pose_hp_bars, pose_shields, pose_weapons, refresh_remote_weapons,
     refresh_weapon, spawn_predicted_shots, subscribe_world, sync_dummy, sync_nameplates,
@@ -120,6 +120,7 @@ fn main() {
         .insert_resource(GatherHintFlash::default())
         .insert_resource(DummyArmorFlash::default())
         .insert_resource(DummyHpFlash::default())
+        .insert_resource(XpBarFlash::default())
         .insert_resource(HelpOverlay::default())
         .add_systems(Startup, (setup_scene, connect, setup_hud, load_sfx))
         .add_systems(
@@ -736,6 +737,7 @@ fn update_hud(
     time: Res<Time>,
     mut stam_flash: ResMut<StamFlash>,
     mut gather_flash: ResMut<GatherHintFlash>,
+    mut xp_flash: ResMut<XpBarFlash>,
     hit_flash: Res<HitFlash>,
     dummy_hp_flash: Res<DummyHpFlash>,
     control: Res<ControlState>,
@@ -763,7 +765,7 @@ fn update_hud(
         Query<(&mut Node, &mut BackgroundColor), With<HpFill>>,
         Query<(&mut Node, &mut BackgroundColor), With<StamFill>>,
         Query<(&mut Node, &mut BackgroundColor), With<DummyHpFill>>,
-        Query<&mut Node, With<XpFill>>,
+        Query<(&mut Node, &mut BackgroundColor), With<XpFill>>,
         Query<
             (&mut Text, &mut TextColor, &mut Node),
             (
@@ -813,6 +815,7 @@ fn update_hud(
     }
     stam_flash.t = (stam_flash.t - time.delta_secs()).max(0.0);
     gather_flash.t = (gather_flash.t - time.delta_secs()).max(0.0);
+    xp_flash.t = (xp_flash.t - time.delta_secs()).max(0.0);
     let in_range = unbound_shared::gather_hint_in_range(!control.drawn, vitals.node_dist);
     if unbound_shared::gather_hint_entered(gather_flash.was_in, in_range) {
         gather_flash.t = unbound_shared::GATHER_HINT_FLASH_TIME;
@@ -845,8 +848,10 @@ fn update_hud(
         (s, v)
     };
     let (xp_lvl, into, span, frac) = skill_progress(xp_val);
-    if let Ok(mut fill) = bars.p3().single_mut() {
+    if let Ok((mut fill, mut bg)) = bars.p3().single_mut() {
         fill.width = Val::Percent((100.0 * frac).clamp(0.0, 100.0));
+        let (r, g, b) = unbound_shared::xp_bar_tint(xp_flash.t);
+        bg.0 = Color::srgb(r, g, b);
     }
     if let Ok(mut text) = xp_label.single_mut() {
         text.0 = if span == 0 {

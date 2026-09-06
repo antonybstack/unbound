@@ -300,6 +300,7 @@ pub const HOTBAR_BORDER: f32 = 1.5;
 pub const HOTBAR_FLASH_EXTRA: f32 = 1.5;
 pub const GATHER_HINT_FLASH_TIME: f32 = 0.2;
 pub const HP_FLASH_TIME: f32 = 0.16;
+pub const XP_FLASH_TIME: f32 = 0.2;
 pub const HYPERARMOR_FLASH_TIME: f32 = 0.18;
 pub const HYPERARMOR_FLASH_EMISSIVE: f32 = 8.0;
 pub const HYPERARMOR_FLASH_SCALE: f32 = 0.1;
@@ -752,6 +753,27 @@ pub fn hp_bar_tint(t: f32) -> (f32, f32, f32) {
 /// Dummy HUD and world bars flash on a hit or kill. Player chips use HitFlash.
 pub fn dummy_hp_bar_hit(kind: u8, target_is_dummy: bool) -> bool {
     target_is_dummy && (kind == 1 || kind == 2)
+}
+
+/// 1 at skill-up, 0 at rest. Quadratic ease so the XP bar snaps gold then settles.
+pub fn xp_bar_flash(t: f32) -> f32 {
+    let a = (t / XP_FLASH_TIME).clamp(0.0, 1.0);
+    a * a
+}
+
+/// Rest mint; flash goes gold so a level-up reads on the bar besides the ding.
+pub fn xp_bar_tint(t: f32) -> (f32, f32, f32) {
+    let k = xp_bar_flash(t);
+    (
+        0.35 + k * (0.98 - 0.35),
+        0.78 + k * (0.92 - 0.78),
+        0.55 + k * (0.42 - 0.55),
+    )
+}
+
+/// True when a primed skill row crosses a level. First sync does not flash.
+pub fn xp_bar_levelled(primed: bool, old: u8, new: u8) -> bool {
+    primed && new > old
 }
 
 pub fn hp_regen_ok(action: u8) -> bool {

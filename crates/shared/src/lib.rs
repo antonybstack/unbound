@@ -935,6 +935,33 @@ mod tests {
     }
 
     #[test]
+    fn xp_bar_flashes_gold_when_a_skill_ticks_up() {
+        assert!((XP_FLASH_TIME - 0.2).abs() < 1e-4);
+        assert!((xp_bar_flash(0.0)).abs() < 1e-4);
+        assert!((xp_bar_flash(XP_FLASH_TIME) - 1.0).abs() < 1e-4);
+        let mid = xp_bar_flash(XP_FLASH_TIME * 0.5);
+        assert!(mid > 0.0 && mid < 1.0);
+        assert!((xp_bar_flash(-0.5)).abs() < 1e-4);
+        assert!((xp_bar_flash(XP_FLASH_TIME * 2.0) - 1.0).abs() < 1e-4);
+        let (rr, rg, rb) = xp_bar_tint(0.0);
+        assert!((rr - 0.35).abs() < 1e-4);
+        assert!((rg - 0.78).abs() < 1e-4);
+        assert!((rb - 0.55).abs() < 1e-4);
+        let (kr, kg, kb) = xp_bar_tint(XP_FLASH_TIME);
+        assert!(kr > rr && kg > rg && kb < rb);
+        assert!(kr >= 0.96 && kg >= 0.90 && kb <= 0.44);
+        let (mr, mg, mb) = xp_bar_tint(XP_FLASH_TIME * 0.5);
+        assert!(mr > rr && mr < kr);
+        assert!(mg > rg && mg < kg);
+        assert!(mb < rb && mb > kb);
+        assert!(xp_bar_levelled(true, 1, 2));
+        assert!(xp_bar_levelled(true, 4, 5));
+        assert!(!xp_bar_levelled(false, 1, 2));
+        assert!(!xp_bar_levelled(true, 2, 2));
+        assert!(!xp_bar_levelled(true, 3, 2));
+    }
+
+    #[test]
     fn dummy_hp_bar_flashes_when_dummy_is_hit() {
         assert!(dummy_hp_bar_hit(1, true));
         assert!(dummy_hp_bar_hit(2, true));
