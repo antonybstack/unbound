@@ -467,9 +467,10 @@ mod tests {
 
     #[test]
     fn camera_closes_when_drawn() {
-        assert!((camera_distance(false, false) - CAM_SHEATHED).abs() < 1e-4);
-        assert!(camera_distance(true, false) < camera_distance(false, false));
-        assert!((camera_distance(true, true) - CAM_LOCK).abs() < 1e-4);
+        assert!((camera_distance(false, false, false) - CAM_SHEATHED).abs() < 1e-4);
+        assert!(camera_distance(true, false, false) < camera_distance(false, false, false));
+        assert!((camera_distance(true, true, false) - CAM_LOCK).abs() < 1e-4);
+        assert!(camera_distance(false, false, true) < camera_distance(false, false, false));
     }
 
     #[test]

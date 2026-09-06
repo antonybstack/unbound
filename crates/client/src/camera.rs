@@ -106,7 +106,9 @@ pub fn update_camera(
         .ok()
         .map(|t| t.translation)
         .unwrap_or(Vec3::new(0.0, PLAYER_HEIGHT * 0.5, 0.0));
-    let want = camera_distance(control.drawn, control.lock_on);
+    let sprinting =
+        (control.buttons & unbound_shared::BTN_SPRINT) != 0 && control.pred_stamina > 1.0;
+    let want = camera_distance(control.drawn, control.lock_on, sprinting);
     let blend = (8.0 * dt).min(1.0);
     control.cam_dist += (want - control.cam_dist) * blend;
     control.shake = (control.shake - dt).max(0.0);
