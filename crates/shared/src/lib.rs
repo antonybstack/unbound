@@ -580,6 +580,19 @@ mod tests {
     }
 
     #[test]
+    fn nameplate_fades_out_on_death_and_in_on_respawn() {
+        assert!(NAMEPLATE_FADE_TIME >= 0.25 && NAMEPLATE_FADE_TIME <= 0.35);
+        assert!((nameplate_alpha(true, 1.0, 0.1) - 1.0).abs() < 1e-4);
+        assert!((nameplate_alpha(false, 0.0, 0.1) - 0.0).abs() < 1e-4);
+        assert!((nameplate_alpha(false, 1.0, NAMEPLATE_FADE_TIME * 0.5) - 0.5).abs() < 1e-4);
+        assert!((nameplate_alpha(true, 0.0, NAMEPLATE_FADE_TIME * 0.5) - 0.5).abs() < 1e-4);
+        assert!((nameplate_alpha(false, 1.0, NAMEPLATE_FADE_TIME) - 0.0).abs() < 1e-4);
+        assert!((nameplate_alpha(true, 0.0, NAMEPLATE_FADE_TIME) - 1.0).abs() < 1e-4);
+        assert!((nameplate_alpha(false, 1.0, NAMEPLATE_FADE_TIME * 2.0) - 0.0).abs() < 1e-4);
+        assert!((nameplate_alpha(true, 0.0, -0.1) - 0.0).abs() < 1e-4);
+    }
+
+    #[test]
     fn node_respawn_fires_once_when_charges_return() {
         assert!(node_respawned(0, 4));
         assert!(node_respawned(0, 3));
@@ -632,13 +645,15 @@ mod tests {
         assert!((extra - CAM_SPRINT_EXTRA).abs() < 1e-4);
         assert!(extra >= 0.4 && extra <= 0.8);
         assert!(
-            (camera_distance(true, false, true) - camera_distance(true, false, false)
+            (camera_distance(true, false, true)
+                - camera_distance(true, false, false)
                 - CAM_SPRINT_EXTRA)
                 .abs()
                 < 1e-4
         );
         assert!(
-            (camera_distance(false, true, true) - camera_distance(false, true, false)
+            (camera_distance(false, true, true)
+                - camera_distance(false, true, false)
                 - CAM_SPRINT_EXTRA)
                 .abs()
                 < 1e-4

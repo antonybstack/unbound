@@ -295,6 +295,26 @@ pub const DUMMY_PIP_ALPHA: f32 = 0.9;
 pub const HYPERARMOR_FLASH_TIME: f32 = 0.18;
 pub const HYPERARMOR_FLASH_EMISSIVE: f32 = 8.0;
 pub const HYPERARMOR_FLASH_SCALE: f32 = 0.1;
+pub const NAMEPLATE_FADE_TIME: f32 = 0.3;
+
+/// Plate (and dummy HP bar) alpha. Alive holds 1; death eases to 0 over
+/// NAMEPLATE_FADE_TIME and a respawn eases back so the drop does not pop.
+pub fn nameplate_alpha(alive: bool, current: f32, dt: f32) -> f32 {
+    let target = if alive { 1.0 } else { 0.0 };
+    let step = if NAMEPLATE_FADE_TIME > 0.0 {
+        (dt / NAMEPLATE_FADE_TIME).max(0.0)
+    } else {
+        1.0
+    };
+    let current = current.clamp(0.0, 1.0);
+    if (target - current).abs() <= step {
+        target
+    } else if current < target {
+        current + step
+    } else {
+        current - step
+    }
+}
 
 pub fn dummy_light_windup() -> u8 {
     12

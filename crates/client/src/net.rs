@@ -414,7 +414,9 @@ fn spawn_pawn(
                     ..default()
                 })),
                 Transform::from_xyz(0.0, 1.2, 0.0),
-                crate::combat::HpBar,
+                crate::combat::HpBar {
+                    fade: if player.alive { 1.0 } else { 0.0 },
+                },
             ))
             .id();
         commands.entity(parent).add_child(bar);

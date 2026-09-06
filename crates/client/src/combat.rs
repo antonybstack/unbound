@@ -4,13 +4,12 @@ use unbound_shared::{
     aim_dir, death_started, dodge_burst_dt, dodge_dir, dummy_body_scale, dummy_club_pitch,
     dummy_telegraph_started, dummy_windup_ticks, hyperarmor, hyperarmor_flash_emissive,
     hyperarmor_flash_scale, incoming_hit_shake, integrate, invulnerable_for, life_started, loadout,
-    melee_lunge_dt, merge_input_buttons, node_respawned, predicted_busy_ticks,
-    predicted_release_ticks,
-    start_drawn_action, start_gather_action, weapon_extra_rotation, ACTION_BLOCK, ACTION_DEAD,
-    ACTION_DODGE, ACTION_HEAVY, ACTION_HIT, ACTION_LIGHT, ACTION_NONE, BTN_BLOCK, BTN_DODGE,
-    BTN_HEAVY, BTN_LIGHT, BTN_SPRINT, DODGE_SPEED, GATHER_RANGE, HYPERARMOR_FLASH_TIME, MAX_HP,
-    MAX_STAMINA, MOVE_SPEED, PLAYER_HEIGHT, SHOT_CEILING_Y, SHOT_GROUND_Y, SHOT_SPAWN_Y,
-    SPRINT_STAMINA_PER_SEC, STAMINA_REGEN_PER_SEC, TICK_HZ,
+    melee_lunge_dt, merge_input_buttons, nameplate_alpha, node_respawned, predicted_busy_ticks,
+    predicted_release_ticks, start_drawn_action, start_gather_action, weapon_extra_rotation,
+    ACTION_BLOCK, ACTION_DEAD, ACTION_DODGE, ACTION_HEAVY, ACTION_HIT, ACTION_LIGHT, ACTION_NONE,
+    BTN_BLOCK, BTN_DODGE, BTN_HEAVY, BTN_LIGHT, BTN_SPRINT, DODGE_SPEED, GATHER_RANGE,
+    HYPERARMOR_FLASH_TIME, MAX_HP, MAX_STAMINA, MOVE_SPEED, PLAYER_HEIGHT, SHOT_CEILING_Y,
+    SHOT_GROUND_Y, SHOT_SPAWN_Y, SPRINT_STAMINA_PER_SEC, STAMINA_REGEN_PER_SEC, TICK_HZ,
 };
 
 use crate::camera::ControlState;
@@ -29,11 +28,14 @@ use spacetimedb_sdk::Table;
 pub struct DummyPawn;
 
 #[derive(Component)]
-pub struct HpBar;
+pub struct HpBar {
+    pub fade: f32,
+}
 
 #[derive(Component)]
 pub struct Nameplate {
     pub target: Entity,
+    pub alpha: f32,
 }
 
 #[derive(Component)]
@@ -304,16 +306,24 @@ pub fn interpolate_dummy(
 }
 
 pub fn pose_hp_bars(
+    time: Res<Time>,
     camera: Query<&GlobalTransform, With<MainCamera>>,
     dummy: Query<(&DummyPose, &GlobalTransform), With<DummyPawn>>,
     remotes: Query<(&ServerPose, &GlobalTransform), With<RemotePlayer>>,
-    mut bars: Query<(&ChildOf, &mut Transform), With<HpBar>>,
+    mut bars: Query<(
+        &ChildOf,
+        &mut Transform,
+        &mut HpBar,
+        &MeshMaterial3d<StandardMaterial>,
+    )>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     let Ok(cam) = camera.single() else {
         return;
     };
     let cam_pos = cam.translation();
-    for (parent, mut tf) in &mut bars {
+    let dt = time.delta_secs();
+    for (parent, mut tf, mut bar, mat) in &mut bars {
         let parent_e = parent.parent();
         let (hp, alive, parent_tf) = if let Ok((pose, g)) = dummy.get(parent_e) {
             (pose.hp, pose.alive, *g)
@@ -328,21 +338,30 @@ pub fn pose_hp_bars(
         } else {
             0.05
         };
+        bar.fade = nameplate_alpha(alive, bar.fade, dt);
         *tf = Transform::from_xyz(0.0, 1.28, 0.0)
             .looking_at(cam_local, Vec3::Y)
             .with_scale(Vec3::new(ratio, 1.0, 1.0));
+        if let Some(mut m) = materials.get_mut(&mat.0) {
+            m.base_color.set_alpha(bar.fade);
+            m.alpha_mode = if bar.fade < 0.999 {
+                AlphaMode::Blend
+            } else {
+                AlphaMode::Opaque
+            };
+        }
     }
 }
 
 pub fn sync_nameplates(
     mut commands: Commands,
-    dummy: Query<Entity, With<DummyPawn>>,
-    remotes: Query<Entity, With<RemotePlayer>>,
+    dummy: Query<(Entity, &DummyPose), With<DummyPawn>>,
+    remotes: Query<(Entity, &ServerPose), With<RemotePlayer>>,
     plates: Query<(Entity, &Nameplate)>,
 ) {
-    let mut wanted: Vec<Entity> = dummy.iter().collect();
-    wanted.extend(remotes.iter());
-    for target in &wanted {
+    let mut wanted: Vec<(Entity, bool)> = dummy.iter().map(|(e, p)| (e, p.alive)).collect();
+    wanted.extend(remotes.iter().map(|(e, p)| (e, p.alive)));
+    for (target, alive) in &wanted {
         if plates.iter().any(|(_, p)| p.target == *target) {
             continue;
         }
@@ -357,26 +376,32 @@ pub fn sync_nameplates(
             TextFont::from_font_size(13.0),
             TextColor(Color::srgb(0.95, 0.93, 0.86)),
             TextLayout::no_wrap(),
-            Nameplate { target: *target },
+            Pickable::IGNORE,
+            Nameplate {
+                target: *target,
+                alpha: if *alive { 1.0 } else { 0.0 },
+            },
         ));
     }
     for (e, plate) in &plates {
-        if !wanted.contains(&plate.target) {
+        if !wanted.iter().any(|(t, _)| *t == plate.target) {
             commands.entity(e).despawn();
         }
     }
 }
 
 pub fn update_nameplates(
+    time: Res<Time>,
     camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
     dummy: Query<(&DummyPose, &GlobalTransform), With<DummyPawn>>,
     remotes: Query<(&ServerPose, &GlobalTransform), With<RemotePlayer>>,
-    mut plates: Query<(&Nameplate, &mut Node, &mut Text, &mut TextColor)>,
+    mut plates: Query<(&mut Nameplate, &mut Node, &mut Text, &mut TextColor)>,
 ) {
     let Ok((cam, cam_tf)) = camera.single() else {
         return;
     };
-    for (plate, mut node, mut text, mut color) in &mut plates {
+    let dt = time.delta_secs();
+    for (mut plate, mut node, mut text, mut color) in &mut plates {
         let (world, label, hp, alive) = if let Ok((pose, g)) = dummy.get(plate.target) {
             (
                 g.translation() + Vec3::Y * 1.15,
@@ -395,6 +420,7 @@ pub fn update_nameplates(
             node.top = Val::Px(-80.0);
             continue;
         };
+        plate.alpha = nameplate_alpha(alive, plate.alpha, dt);
         let Ok(screen) = cam.world_to_viewport(cam_tf, world) else {
             node.top = Val::Px(-80.0);
             continue;
@@ -412,9 +438,9 @@ pub fn update_nameplates(
             format!("{label}  down")
         };
         color.0 = if alive {
-            Color::srgb(0.95, 0.93, 0.86)
+            Color::srgba(0.95, 0.93, 0.86, plate.alpha)
         } else {
-            Color::srgb(0.55, 0.55, 0.55)
+            Color::srgba(0.55, 0.55, 0.55, plate.alpha)
         };
     }
 }
@@ -1620,7 +1646,9 @@ fn spawn_dummy(
                 1.0,
                 1.0,
             )),
-            HpBar,
+            HpBar {
+                fade: if dummy.alive { 1.0 } else { 0.0 },
+            },
         ))
         .id();
     commands.entity(root).add_child(club);
