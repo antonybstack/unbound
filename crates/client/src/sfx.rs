@@ -1,6 +1,9 @@
 use bevy::prelude::*;
 use bevy_stdb::prelude::*;
-use unbound_shared::{ACTION_DEAD, ACTION_DODGE, ACTION_HEAVY, dummy_telegraph_started, move_lock};
+use unbound_shared::{
+    ACTION_DEAD, ACTION_DODGE, ACTION_HEAVY, LOADOUT_BOW, LOADOUT_STAFF, dummy_telegraph_started,
+    move_lock,
+};
 
 use crate::StdbConn;
 use crate::module_bindings::{CombatEvent, Projectile};
@@ -87,11 +90,7 @@ pub fn play_local_sfx(
         control.sfx_swing = 0;
     }
     if control.sfx_draw != 0 {
-        let draw = control.sfx_draw > 0;
-        let mut settings = PlaybackSettings::DESPAWN;
-        settings.volume = bevy::audio::Volume::Linear(0.4);
-        settings.speed = if draw { 1.15 } else { 0.75 };
-        commands.spawn((AudioPlayer::new(sfx.block.clone()), settings));
+        play_draw_sfx(&mut commands, &sfx, control.loadout, control.sfx_draw > 0);
         control.sfx_draw = 0;
     }
     if control.sfx_foot != 0 {
@@ -315,6 +314,20 @@ fn play_swing_whoosh(commands: &mut Commands, sfx: &Sfx, heavy: bool, scale: f32
     let mut settings = PlaybackSettings::DESPAWN;
     settings.volume = bevy::audio::Volume::Linear(if heavy { 0.38 } else { 0.26 } * scale);
     settings.speed = if heavy { 0.85 } else { 1.35 };
+    commands.spawn((AudioPlayer::new(handle), settings));
+}
+
+fn play_draw_sfx(commands: &mut Commands, sfx: &Sfx, loadout: u8, draw: bool) {
+    // Sword: steel-on-leather. Bow: quieter higher string. Staff: lower/thicker.
+    let (handle, volume, speed) = match loadout {
+        LOADOUT_BOW => (sfx.dodge.clone(), 0.24, 1.55),
+        LOADOUT_STAFF => (sfx.heavy.clone(), 0.38, 0.68),
+        _ => (sfx.block.clone(), 0.4, 1.15),
+    };
+    let mut settings = PlaybackSettings::DESPAWN;
+    settings.volume = bevy::audio::Volume::Linear(volume);
+    // Sheathe is the same sample pitched down. Sword stays 1.15 / 0.75.
+    settings.speed = if draw { speed } else { speed * 0.75 / 1.15 };
     commands.spawn((AudioPlayer::new(handle), settings));
 }
 
