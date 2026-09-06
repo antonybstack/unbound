@@ -126,7 +126,7 @@ An MMO is a studio. A yard that feels right is a side project.
 
 | Slice | Status | Bar |
 |---|---|---|
-| **0 — locomotion** | Playable | Sheathe/draw camera (far WoW vs close shoulder + lock-on frame), predicted WASD, local pawn snaps to server spawn, 30 Hz module, native + browser against one local host. |
+| **0 — locomotion** | Playable | Sheathe/draw camera (far WoW vs close shoulder + lock-on frame), predicted WASD, local pawn snaps to server spawn, 30 Hz module, native + browser against one local host. Tab puts a gold ring on the lock target and drops if they die or leave range. |
 | **1 — three loadouts** | Playable | Sword, bow, staff (`1/2/3`). Stamina, light/heavy, dodge i-frames in the roll (ghosted), block. Dummy holds a pocket and winds a club (heavy under 70 HP). Client predicts swing start and the bolt leaving the bow; bows/staffs aim with camera pitch; hits shake the camera. |
 | **2 — 1v1 PvP** | Playable | Same combat rules on every player capsule. Two clients (or headless bots) share the yard; hits, blocks, deaths, and respawns apply to both. |
 | **3 — a character that persists** | Playable | `character` row keeps XP/name across disconnect. Client stores the STDB access token so a relaunch is the same wanderer. Skills go up when you land hits (level-up toast). Sheathed `E` gathers wood/ore into Gathering. |

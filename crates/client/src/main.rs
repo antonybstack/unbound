@@ -11,9 +11,9 @@ use unbound_shared::{
     MAX_STAMINA, PLAYER_HEIGHT, action_label, loadout,
 };
 
-use crate::camera::{ControlState, update_camera, update_cursor};
+use crate::camera::{ControlState, LockReticle, update_camera, update_cursor};
 use crate::combat::{
-    DummyPawn, HitFlash, LocalVitals, WeaponState, apply_predicted_starts, flash_hits,
+    DummyPawn, DummyPose, HitFlash, LocalVitals, WeaponState, apply_predicted_starts, flash_hits,
     fly_predicted_shots, fly_shots, interpolate_dummy, pose_dummy_club, pose_hp_bars, pose_shields,
     pose_weapons, refresh_remote_weapons, refresh_weapon, spawn_predicted_shots, subscribe_world,
     sync_dummy, sync_nameplates, sync_nodes, sync_projectiles, sync_vitals, tick_dummy_pose,
@@ -24,9 +24,9 @@ use crate::module_bindings::{
     GatherNodeTableAccessor, PlayerTableAccessor, ProjectileTableAccessor, RemoteModule,
 };
 use crate::net::{
-    LocalPlayer, RemotePlayer, apply_player_deletes, apply_player_inserts, apply_player_updates,
-    bind_local_player, connect, interpolate_remotes, predict_local, send_input,
-    spawn_pawns_from_cache,
+    LocalPlayer, RemotePlayer, ServerPose, apply_player_deletes, apply_player_inserts,
+    apply_player_updates, bind_local_player, connect, interpolate_remotes, predict_local,
+    send_input, spawn_pawns_from_cache,
 };
 use crate::persist::persist_on_connect;
 
@@ -245,6 +245,18 @@ fn setup_scene(
             .looking_at(Vec3::new(0.0, PLAYER_HEIGHT * 0.5, 0.0), Vec3::Y),
         MainCamera,
     ));
+
+    commands.spawn((
+        Mesh3d(meshes.add(Torus::new(0.34, 0.03))),
+        MeshMaterial3d(materials.add(StandardMaterial {
+            base_color: Color::srgb(0.95, 0.82, 0.28),
+            unlit: true,
+            emissive: LinearRgba::rgb(0.8, 0.6, 0.1) * 2.0,
+            ..default()
+        })),
+        Transform::from_scale(Vec3::ZERO),
+        LockReticle,
+    ));
 }
 
 fn setup_hud(mut commands: Commands) {
@@ -415,9 +427,9 @@ fn read_combat_input(
     keys: Res<ButtonInput<KeyCode>>,
     mouse: Res<ButtonInput<MouseButton>>,
     mut control: ResMut<ControlState>,
-    dummy: Query<&Transform, With<DummyPawn>>,
+    dummy: Query<(&Transform, &DummyPose), With<DummyPawn>>,
     local: Query<&Transform, With<LocalPlayer>>,
-    remotes: Query<&Transform, With<RemotePlayer>>,
+    remotes: Query<(&Transform, &ServerPose), With<RemotePlayer>>,
 ) {
     if keys.just_pressed(KeyCode::KeyF) {
         control.drawn = !control.drawn;
@@ -463,18 +475,28 @@ fn read_combat_input(
                     *best = Some((d, pos));
                 }
             };
-            if let Ok(dummy) = dummy.single() {
-                consider(&mut best, dummy.translation);
+            if let Ok((dummy_tf, pose)) = dummy.single() {
+                if pose.alive {
+                    consider(&mut best, dummy_tf.translation);
+                }
             }
-            for remote in &remotes {
-                consider(&mut best, remote.translation);
+            for (tf, pose) in &remotes {
+                if pose.alive {
+                    consider(&mut best, tf.translation);
+                }
             }
-            if let Some((_, pos)) = best {
-                let dx = pos.x - me.translation.x;
-                let dz = pos.z - me.translation.z;
-                control.yaw = (-dx).atan2(-dz);
-                control.lock_focus = Some(pos);
+            if let Some((dist, pos)) = best {
+                if dist <= unbound_shared::LOCK_RANGE {
+                    let dx = pos.x - me.translation.x;
+                    let dz = pos.z - me.translation.z;
+                    control.yaw = (-dx).atan2(-dz);
+                    control.lock_focus = Some(pos);
+                } else {
+                    control.lock_on = false;
+                    control.lock_focus = None;
+                }
             } else {
+                control.lock_on = false;
                 control.lock_focus = None;
             }
         }

@@ -173,6 +173,7 @@ pub const CAM_SPRINT_PULL: f32 = 0.85;
 pub const CAM_LOCK_MIX: f32 = 0.32;
 pub const CAM_SHOULDER: f32 = 0.42;
 pub const CAM_SHAKE_TIME: f32 = 0.16;
+pub const LOCK_RANGE: f32 = 16.0;
 
 pub fn dummy_light_windup() -> u8 {
     12

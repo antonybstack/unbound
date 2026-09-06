@@ -10,6 +10,9 @@ use unbound_shared::{
 
 const LOOK_SENS: f32 = 0.004;
 
+#[derive(Component)]
+pub struct LockReticle;
+
 #[derive(Resource)]
 pub struct ControlState {
     pub drawn: bool,
@@ -83,6 +86,7 @@ pub fn update_camera(
     mut control: ResMut<ControlState>,
     mut camera: Query<&mut Transform, With<MainCamera>>,
     local: Query<&Transform, (With<LocalPlayer>, Without<MainCamera>)>,
+    mut reticle: Query<&mut Transform, (With<LockReticle>, Without<MainCamera>, Without<LocalPlayer>)>,
 ) {
     let dt = time.delta_secs();
     let looking = control.drawn || buttons.pressed(MouseButton::Right);
@@ -141,4 +145,16 @@ pub fn update_camera(
     let offset = rot * (Vec3::new(0.0, 0.0, control.cam_dist) + shoulder);
     camera.translation = focus + offset;
     camera.look_at(focus, Vec3::Y);
+
+    if let Ok(mut ring) = reticle.single_mut() {
+        if let Some(target) = control.lock_focus {
+            let spin = time.elapsed_secs() * 2.2;
+            ring.translation = Vec3::new(target.x, target.y + 1.15, target.z);
+            ring.rotation = Quat::from_rotation_x(std::f32::consts::FRAC_PI_2)
+                * Quat::from_rotation_z(spin);
+            ring.scale = Vec3::ONE;
+        } else {
+            ring.scale = Vec3::ZERO;
+        }
+    }
 }

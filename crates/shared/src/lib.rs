@@ -478,6 +478,8 @@ mod tests {
         let (x, z) = lock_focus_xz(0.0, 0.0, 10.0, 0.0, 0.3);
         assert!((x - 3.0).abs() < 1e-3);
         assert!(z.abs() < 1e-4);
+        assert!(LOCK_RANGE > DUMMY_STRIKE_RANGE);
+        assert!(LOCK_RANGE < WORLD_HALF);
     }
 
     #[test]
