@@ -5,8 +5,9 @@ use bevy::window::{CursorGrabMode, CursorOptions};
 use crate::{LocalPlayer, MainCamera};
 use unbound_shared::{
     camera_distance, camera_push_out, camera_shake_amp, lock_focus_xz, lock_reticle_lost_scale,
-    lock_reticle_scale, ACTION_DEAD, ACTION_DODGE, ACTION_NONE, CAM_BLOCK_RADIUS, CAM_SHEATHED,
-    CAM_SHOULDER, MAX_STAMINA, PLAYER_HEIGHT,
+    lock_reticle_scale, spawn_camera_blend, spawn_camera_focus, ACTION_DEAD, ACTION_DODGE,
+    ACTION_NONE, ACTION_SPAWN, CAM_BLOCK_RADIUS, CAM_SHEATHED, CAM_SHOULDER, MAX_STAMINA,
+    PLAYER_HEIGHT,
 };
 
 #[derive(Component, Clone, Copy)]
@@ -44,6 +45,7 @@ pub struct ControlState {
     pub pred_stamina: f32,
     pub pred_loadout: u8,
     pub cam_dist: f32,
+    pub cam_focus: Vec3,
     pub shake: f32,
     pub lock_focus: Option<Vec3>,
     pub pred_shot: bool,
@@ -89,6 +91,7 @@ impl Default for ControlState {
             pred_stamina: MAX_STAMINA,
             pred_loadout: 0,
             cam_dist: CAM_SHEATHED,
+            cam_focus: Vec3::new(0.0, PLAYER_HEIGHT * 0.5, 0.0),
             shake: 0.0,
             lock_focus: None,
             pred_shot: false,
@@ -186,9 +189,25 @@ pub fn update_camera(
         && control.pred_stamina > 1.0
         && can_step;
     let dodging = control.pred_action == ACTION_DODGE;
+    let spawning = control.pred_action == ACTION_SPAWN;
     let want = camera_distance(control.drawn, control.lock_on, sprinting, dodging);
     let blend = (8.0 * dt).min(1.0);
     control.cam_dist += (want - control.cam_dist) * blend;
+    if spawning {
+        let b = spawn_camera_blend(dt);
+        let (x, y, z) = spawn_camera_focus(
+            control.cam_focus.x,
+            control.cam_focus.y,
+            control.cam_focus.z,
+            player.x,
+            player.y,
+            player.z,
+            b,
+        );
+        control.cam_focus = Vec3::new(x, y, z);
+    } else {
+        control.cam_focus = player;
+    }
     control.shake = (control.shake - dt).max(0.0);
     control.lock_pulse = (control.lock_pulse - dt).max(0.0);
     control.lock_lost = (control.lock_lost - dt).max(0.0);
@@ -198,17 +217,17 @@ pub fn update_camera(
     control.shot_kick = (control.shot_kick - dt).max(0.0);
     control.pip_pulse = (control.pip_pulse - dt).max(0.0);
 
-    let mut focus = player;
+    let mut focus = control.cam_focus;
     if control.lock_on {
         if let Some(target) = control.lock_focus {
             let (fx, fz) = lock_focus_xz(
-                player.x,
-                player.z,
+                focus.x,
+                focus.z,
                 target.x,
                 target.z,
                 unbound_shared::CAM_LOCK_MIX,
             );
-            focus = Vec3::new(fx, player.y + 0.12, fz);
+            focus = Vec3::new(fx, focus.y + 0.12, fz);
         }
     }
     let amp = camera_shake_amp(control.shake);

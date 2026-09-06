@@ -275,6 +275,7 @@ pub const CAM_DRAWN: f32 = 4.35;
 pub const CAM_LOCK: f32 = 5.15;
 pub const CAM_SPRINT_EXTRA: f32 = 0.55;
 pub const CAM_DODGE_EXTRA: f32 = 0.45;
+pub const CAM_SPAWN_BLEND: f32 = 4.0;
 pub const CAM_LOCK_MIX: f32 = 0.32;
 pub const CAM_SHOULDER: f32 = 0.42;
 pub const CAM_SHAKE_TIME: f32 = 0.16;
@@ -436,6 +437,30 @@ pub fn camera_distance(drawn: bool, lock_on: bool, sprinting: bool, dodging: boo
         0.0
     };
     base + extra
+}
+
+/// How far the camera steps toward the pawn during walk-out grace. 0 stays,
+/// 1 snaps. Idle follow is a snap; spawn uses this so the yard does not jump.
+pub fn spawn_camera_blend(dt: f32) -> f32 {
+    (CAM_SPAWN_BLEND * dt.max(0.0)).min(1.0)
+}
+
+/// Mix last focus toward the pawn. Identity when blend is 1.
+pub fn spawn_camera_focus(
+    from_x: f32,
+    from_y: f32,
+    from_z: f32,
+    to_x: f32,
+    to_y: f32,
+    to_z: f32,
+    blend: f32,
+) -> (f32, f32, f32) {
+    let b = blend.clamp(0.0, 1.0);
+    (
+        from_x + (to_x - from_x) * b,
+        from_y + (to_y - from_y) * b,
+        from_z + (to_z - from_z) * b,
+    )
 }
 
 pub fn lock_focus_xz(px: f32, pz: f32, tx: f32, tz: f32, mix: f32) -> (f32, f32) {

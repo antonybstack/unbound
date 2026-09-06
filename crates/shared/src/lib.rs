@@ -695,6 +695,34 @@ mod tests {
     }
 
     #[test]
+    fn camera_eases_to_spawn_instead_of_snapping() {
+        assert!((spawn_camera_blend(0.0) - 0.0).abs() < 1e-4);
+        assert!((spawn_camera_blend(-0.1) - 0.0).abs() < 1e-4);
+        let step = spawn_camera_blend(0.1);
+        assert!((step - CAM_SPAWN_BLEND * 0.1).abs() < 1e-4);
+        assert!(step > 0.0 && step < 1.0);
+        assert!((spawn_camera_blend(1.0) - 1.0).abs() < 1e-4);
+        assert!(CAM_SPAWN_BLEND >= 3.0 && CAM_SPAWN_BLEND <= 5.0);
+        let (x, y, z) = spawn_camera_focus(0.0, 0.8, 0.0, 10.0, 0.8, 6.0, 0.0);
+        assert!(x.abs() < 1e-4 && (y - 0.8).abs() < 1e-4 && z.abs() < 1e-4);
+        let (x, y, z) = spawn_camera_focus(0.0, 0.8, 0.0, 10.0, 0.8, 6.0, 1.0);
+        assert!((x - 10.0).abs() < 1e-4 && (y - 0.8).abs() < 1e-4 && (z - 6.0).abs() < 1e-4);
+        let (x, _, z) = spawn_camera_focus(0.0, 0.8, 0.0, 10.0, 0.8, 6.0, 0.5);
+        assert!((x - 5.0).abs() < 1e-4);
+        assert!((z - 3.0).abs() < 1e-4);
+        let b = spawn_camera_blend(1.0 / 60.0);
+        let (_, _, z) = spawn_camera_focus(0.0, 0.8, -8.0, 0.0, 0.8, 6.0, b);
+        assert!(z > -8.0 && z < 6.0);
+        let mut z = -8.0;
+        let dt = 1.0 / TICK_HZ;
+        for _ in 0..spawn_protect_ticks() {
+            let p = spawn_camera_focus(0.0, 0.8, z, 0.0, 0.8, 6.0, spawn_camera_blend(dt));
+            z = p.2;
+        }
+        assert!((z - 6.0).abs() < 0.5);
+    }
+
+    #[test]
     fn lock_focus_sits_between() {
         let (x, z) = lock_focus_xz(0.0, 0.0, 10.0, 0.0, 0.3);
         assert!((x - 3.0).abs() < 1e-3);
