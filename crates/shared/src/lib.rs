@@ -604,6 +604,28 @@ mod tests {
     }
 
     #[test]
+    fn node_mesh_lerps_in_on_restore() {
+        assert!(NODE_RESTORE_TIME >= 0.25 && NODE_RESTORE_TIME <= 0.4);
+        assert!((node_restore_mix(0, 1.0, 0.1) - 0.0).abs() < 1e-4);
+        assert!((node_restore_mix(0, 0.0, 0.1) - 0.0).abs() < 1e-4);
+        assert!((node_restore_mix(4, 1.0, 0.1) - 1.0).abs() < 1e-4);
+        assert!((node_restore_mix(4, 0.0, NODE_RESTORE_TIME * 0.5) - 0.5).abs() < 1e-4);
+        assert!((node_restore_mix(3, 0.0, NODE_RESTORE_TIME) - 1.0).abs() < 1e-4);
+        assert!((node_restore_mix(4, 0.0, NODE_RESTORE_TIME * 2.0) - 1.0).abs() < 1e-4);
+        assert!((node_restore_mix(4, 0.0, -0.1) - 0.0).abs() < 1e-4);
+        let (sx, sy, sz) = node_mesh_scale(0.0);
+        assert!((sx - 1.0).abs() < 1e-4 && (sz - 1.0).abs() < 1e-4);
+        assert!((sy - NODE_EMPTY_SCALE_Y).abs() < 1e-4);
+        assert_eq!(node_mesh_scale(1.0), (1.0, 1.0, 1.0));
+        let (_, mid, _) = node_mesh_scale(0.5);
+        assert!((mid - (NODE_EMPTY_SCALE_Y + 0.5 * (1.0 - NODE_EMPTY_SCALE_Y))).abs() < 1e-4);
+        let mut mix = 0.0;
+        mix = node_restore_mix(0, mix, 0.1);
+        assert!((mix - 0.0).abs() < 1e-4);
+        assert_eq!(node_mesh_scale(mix), (1.0, NODE_EMPTY_SCALE_Y, 1.0));
+    }
+
+    #[test]
     fn gather_requires_range_and_button() {
         assert!(start_gather_action(ACTION_NONE, BTN_INTERACT, false).is_none());
         let start = start_gather_action(ACTION_NONE, BTN_INTERACT, true).unwrap();

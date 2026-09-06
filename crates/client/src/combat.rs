@@ -4,12 +4,13 @@ use unbound_shared::{
     aim_dir, death_started, dodge_burst_dt, dodge_dir, dummy_body_scale, dummy_club_pitch,
     dummy_telegraph_started, dummy_windup_ticks, hyperarmor, hyperarmor_flash_emissive,
     hyperarmor_flash_scale, incoming_hit_shake, integrate, invulnerable_for, life_started, loadout,
-    melee_lunge_dt, merge_input_buttons, nameplate_alpha, node_respawned, predicted_busy_ticks,
-    predicted_release_ticks, start_drawn_action, start_gather_action, weapon_extra_rotation,
-    ACTION_BLOCK, ACTION_DEAD, ACTION_DODGE, ACTION_HEAVY, ACTION_HIT, ACTION_LIGHT, ACTION_NONE,
-    BTN_BLOCK, BTN_DODGE, BTN_HEAVY, BTN_LIGHT, BTN_SPRINT, DODGE_SPEED, GATHER_RANGE,
-    HYPERARMOR_FLASH_TIME, MAX_HP, MAX_STAMINA, MOVE_SPEED, PLAYER_HEIGHT, SHOT_CEILING_Y,
-    SHOT_GROUND_Y, SHOT_SPAWN_Y, SPRINT_STAMINA_PER_SEC, STAMINA_REGEN_PER_SEC, TICK_HZ,
+    melee_lunge_dt, merge_input_buttons, nameplate_alpha, node_mesh_scale, node_respawned,
+    node_restore_mix, predicted_busy_ticks, predicted_release_ticks, start_drawn_action,
+    start_gather_action, weapon_extra_rotation, ACTION_BLOCK, ACTION_DEAD, ACTION_DODGE,
+    ACTION_HEAVY, ACTION_HIT, ACTION_LIGHT, ACTION_NONE, BTN_BLOCK, BTN_DODGE, BTN_HEAVY,
+    BTN_LIGHT, BTN_SPRINT, DODGE_SPEED, GATHER_RANGE, HYPERARMOR_FLASH_TIME, MAX_HP, MAX_STAMINA,
+    MOVE_SPEED, PLAYER_HEIGHT, SHOT_CEILING_Y, SHOT_GROUND_Y, SHOT_SPAWN_Y, SPRINT_STAMINA_PER_SEC,
+    STAMINA_REGEN_PER_SEC, TICK_HZ,
 };
 
 use crate::camera::ControlState;
@@ -138,7 +139,9 @@ pub struct DamageFloater {
 #[derive(Component)]
 pub struct NodePawn {
     pub id: u32,
+    pub kind: u8,
     pub charges: u8,
+    pub restore: f32,
 }
 
 #[derive(Resource)]
@@ -561,22 +564,13 @@ pub fn sync_nodes(
         spawn_node(&mut commands, &mut meshes, &mut materials, &msg.row);
     }
     for msg in updates.read() {
-        for (_e, mut node, mut transform, mat) in &mut nodes {
+        for (_e, mut node, transform, _mat) in &mut nodes {
             if node.id != msg.new.id {
                 continue;
             }
             let emptied = node.charges > 0 && msg.new.charges == 0;
             let returned = node_respawned(node.charges, msg.new.charges);
             node.charges = msg.new.charges;
-            let depleted = msg.new.charges == 0;
-            transform.scale = if depleted {
-                Vec3::new(1.0, 0.45, 1.0)
-            } else {
-                Vec3::ONE
-            };
-            if let Some(mut m) = materials.get_mut(&mat.0) {
-                m.base_color = node_color(msg.new.kind, depleted);
-            }
             if emptied || returned {
                 let at = transform.translation;
                 let color = if msg.new.kind == 1 {
@@ -625,8 +619,18 @@ pub fn sync_nodes(
     let gathering = control.pred_action == unbound_shared::ACTION_GATHER;
     let me = local.single().ok().map(|t| t.translation);
     let pulse = 1.0 + 0.07 * (time.elapsed_secs() * 10.0).sin();
-    for (_e, _node, mut transform, _) in &mut nodes {
-        if transform.scale.y < 0.7 {
+    let dt = time.delta_secs();
+    for (_e, mut node, mut transform, mat) in &mut nodes {
+        let prev = node.restore;
+        node.restore = node_restore_mix(node.charges, node.restore, dt);
+        if node.restore < 1.0 || prev < 1.0 {
+            let (sx, sy, sz) = node_mesh_scale(node.restore);
+            transform.scale = Vec3::new(sx, sy, sz);
+            if let Some(mut m) = materials.get_mut(&mat.0) {
+                m.base_color = node_color(node.kind, node.restore);
+            }
+        }
+        if node.restore < 1.0 {
             continue;
         }
         let near = me
@@ -1447,14 +1451,14 @@ fn dummy_color(action: u8, alive: bool) -> Color {
     }
 }
 
-fn node_color(kind: u8, depleted: bool) -> Color {
-    if depleted {
-        Color::srgb(0.18, 0.16, 0.14)
-    } else if kind == 1 {
+fn node_color(kind: u8, mix: f32) -> Color {
+    let empty = Color::srgb(0.18, 0.16, 0.14);
+    let live = if kind == 1 {
         Color::srgb(0.45, 0.48, 0.52)
     } else {
         Color::srgb(0.38, 0.24, 0.12)
-    }
+    };
+    empty.mix(&live, mix.clamp(0.0, 1.0))
 }
 
 fn attach_weapon(
@@ -1722,7 +1726,8 @@ fn spawn_node(
     materials: &mut Assets<StandardMaterial>,
     node: &GatherNode,
 ) {
-    let depleted = node.charges == 0;
+    let restore = if node.charges == 0 { 0.0 } else { 1.0 };
+    let (sx, sy, sz) = node_mesh_scale(restore);
     let (mesh, y) = if node.kind == 1 {
         (meshes.add(Cuboid::new(0.9, 0.7, 0.9)), 0.35)
     } else {
@@ -1732,19 +1737,18 @@ fn spawn_node(
         .spawn((
             Mesh3d(mesh),
             MeshMaterial3d(materials.add(StandardMaterial {
-                base_color: node_color(node.kind, depleted),
+                base_color: node_color(node.kind, restore),
                 perceptual_roughness: 0.9,
                 ..default()
             })),
-            Transform::from_xyz(node.x, y, node.z).with_scale(if depleted {
-                Vec3::new(1.0, 0.45, 1.0)
-            } else {
-                Vec3::ONE
-            }),
+            Transform::from_xyz(node.x, y, node.z).with_scale(Vec3::new(sx, sy, sz)),
             NodePawn {
                 id: node.id,
+                kind: node.kind,
                 charges: node.charges,
+                restore,
             },
+            // Visual squash does not shrink camera collision.
             crate::camera::CamBlock {
                 radius: if node.kind == 1 { 0.7 } else { 0.9 },
             },

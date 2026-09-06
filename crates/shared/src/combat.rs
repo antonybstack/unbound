@@ -299,6 +299,8 @@ pub const HYPERARMOR_FLASH_TIME: f32 = 0.18;
 pub const HYPERARMOR_FLASH_EMISSIVE: f32 = 8.0;
 pub const HYPERARMOR_FLASH_SCALE: f32 = 0.1;
 pub const NAMEPLATE_FADE_TIME: f32 = 0.3;
+pub const NODE_RESTORE_TIME: f32 = 0.32;
+pub const NODE_EMPTY_SCALE_Y: f32 = 0.45;
 
 /// Plate (and dummy HP bar) alpha. Alive holds 1; death eases to 0 over
 /// NAMEPLATE_FADE_TIME and a respawn eases back so the drop does not pop.
@@ -396,6 +398,35 @@ pub fn life_started(prev_alive: bool, new_alive: bool) -> bool {
 /// and a full node do not re-fire.
 pub fn node_respawned(prev_charges: u8, new_charges: u8) -> bool {
     prev_charges == 0 && new_charges > 0
+}
+
+/// 0 flattened, 1 live. Empty snaps to 0 so a husk stays crushed; charges
+/// returning ease over NODE_RESTORE_TIME so the mesh does not pop.
+pub fn node_restore_mix(charges: u8, current: f32, dt: f32) -> f32 {
+    if charges == 0 {
+        return 0.0;
+    }
+    let step = if NODE_RESTORE_TIME > 0.0 {
+        (dt / NODE_RESTORE_TIME).max(0.0)
+    } else {
+        1.0
+    };
+    let current = current.clamp(0.0, 1.0);
+    if 1.0 - current <= step {
+        1.0
+    } else {
+        current + step
+    }
+}
+
+/// xz stay 1. Mix 0 is the empty squash; 1 is the live size.
+pub fn node_mesh_scale(mix: f32) -> (f32, f32, f32) {
+    let mix = mix.clamp(0.0, 1.0);
+    (
+        1.0,
+        NODE_EMPTY_SCALE_Y + (1.0 - NODE_EMPTY_SCALE_Y) * mix,
+        1.0,
+    )
 }
 
 /// +1 chase, 0 hold the pocket, -1 step back. Dummy should not glue to the player.
