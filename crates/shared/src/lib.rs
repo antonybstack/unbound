@@ -593,6 +593,33 @@ mod tests {
     }
 
     #[test]
+    fn death_veil_eases_in_on_drop_and_out_on_respawn() {
+        assert!(DEATH_VEIL_FADE_TIME >= 0.22 && DEATH_VEIL_FADE_TIME <= 0.35);
+        assert!(DEATH_VEIL_BG_ALPHA >= 0.4 && DEATH_VEIL_BG_ALPHA <= 0.55);
+        assert!((death_veil_mix(false, 0.0, 0.1) - 0.0).abs() < 1e-4);
+        assert!((death_veil_mix(true, 1.0, 0.1) - 1.0).abs() < 1e-4);
+        assert!((death_veil_mix(true, 0.0, DEATH_VEIL_FADE_TIME * 0.5) - 0.5).abs() < 1e-4);
+        assert!((death_veil_mix(false, 1.0, DEATH_VEIL_FADE_TIME * 0.5) - 0.5).abs() < 1e-4);
+        assert!((death_veil_mix(true, 0.0, DEATH_VEIL_FADE_TIME) - 1.0).abs() < 1e-4);
+        assert!((death_veil_mix(false, 1.0, DEATH_VEIL_FADE_TIME) - 0.0).abs() < 1e-4);
+        assert!((death_veil_mix(true, 0.0, DEATH_VEIL_FADE_TIME * 2.0) - 1.0).abs() < 1e-4);
+        assert!((death_veil_mix(true, 0.0, -0.1) - 0.0).abs() < 1e-4);
+        assert!((death_veil_bg_alpha(0.0) - 0.0).abs() < 1e-4);
+        assert!((death_veil_bg_alpha(1.0) - DEATH_VEIL_BG_ALPHA).abs() < 1e-4);
+        assert!((death_veil_bg_alpha(0.5) - DEATH_VEIL_BG_ALPHA * 0.5).abs() < 1e-4);
+        assert!((death_veil_text_alpha(0.0) - 0.0).abs() < 1e-4);
+        assert!((death_veil_text_alpha(1.0) - 1.0).abs() < 1e-4);
+        assert!((death_veil_text_alpha(0.5) - 0.5).abs() < 1e-4);
+        let mut mix = 0.0;
+        mix = death_veil_mix(true, mix, DEATH_VEIL_FADE_TIME * 0.25);
+        assert!(mix > 0.0 && mix < 1.0);
+        assert!(death_veil_bg_alpha(mix) > 0.0 && death_veil_bg_alpha(mix) < DEATH_VEIL_BG_ALPHA);
+        mix = death_veil_mix(false, 1.0, DEATH_VEIL_FADE_TIME);
+        assert!((mix - 0.0).abs() < 1e-4);
+        assert!((death_veil_bg_alpha(mix) - 0.0).abs() < 1e-4);
+    }
+
+    #[test]
     fn node_respawn_fires_once_when_charges_return() {
         assert!(node_respawned(0, 4));
         assert!(node_respawned(0, 3));

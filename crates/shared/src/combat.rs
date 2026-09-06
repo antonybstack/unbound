@@ -299,6 +299,8 @@ pub const HYPERARMOR_FLASH_TIME: f32 = 0.18;
 pub const HYPERARMOR_FLASH_EMISSIVE: f32 = 8.0;
 pub const HYPERARMOR_FLASH_SCALE: f32 = 0.1;
 pub const NAMEPLATE_FADE_TIME: f32 = 0.3;
+pub const DEATH_VEIL_FADE_TIME: f32 = 0.28;
+pub const DEATH_VEIL_BG_ALPHA: f32 = 0.48;
 pub const NODE_RESTORE_TIME: f32 = 0.32;
 pub const NODE_EMPTY_SCALE_Y: f32 = 0.45;
 
@@ -319,6 +321,35 @@ pub fn nameplate_alpha(alive: bool, current: f32, dt: f32) -> f32 {
     } else {
         current - step
     }
+}
+
+/// 0 clear, 1 full veil. Death eases in so YOU DIED does not pop; a respawn
+/// eases out so the yard does not snap back from red.
+pub fn death_veil_mix(dead: bool, current: f32, dt: f32) -> f32 {
+    let target = if dead { 1.0 } else { 0.0 };
+    let step = if DEATH_VEIL_FADE_TIME > 0.0 {
+        (dt / DEATH_VEIL_FADE_TIME).max(0.0)
+    } else {
+        1.0
+    };
+    let current = current.clamp(0.0, 1.0);
+    if (target - current).abs() <= step {
+        target
+    } else if current < target {
+        current + step
+    } else {
+        current - step
+    }
+}
+
+/// Overlay alpha at rest 0, DEATH_VEIL_BG_ALPHA at mix 1.
+pub fn death_veil_bg_alpha(mix: f32) -> f32 {
+    mix.clamp(0.0, 1.0) * DEATH_VEIL_BG_ALPHA
+}
+
+/// Title alpha. 0 hidden, 1 full YOU DIED.
+pub fn death_veil_text_alpha(mix: f32) -> f32 {
+    mix.clamp(0.0, 1.0)
 }
 
 pub fn dummy_light_windup() -> u8 {

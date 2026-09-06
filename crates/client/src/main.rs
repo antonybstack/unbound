@@ -214,7 +214,9 @@ struct HudXp;
 #[derive(Component)]
 struct Crosshair;
 #[derive(Component)]
-struct DeathVeil;
+struct DeathVeil {
+    fade: f32,
+}
 #[derive(Component)]
 struct DeathVeilText;
 #[derive(Component)]
@@ -477,7 +479,7 @@ fn setup_hud(mut commands: Commands) {
             },
             BackgroundColor(Color::srgba(0.04, 0.0, 0.0, 0.0)),
             Pickable::IGNORE,
-            DeathVeil,
+            DeathVeil { fade: 0.0 },
         ))
         .with_children(|root| {
             root.spawn((
@@ -937,16 +939,19 @@ fn update_hotbar(
 }
 
 fn update_death_veil(
+    time: Res<Time>,
     vitals: Res<LocalVitals>,
     control: Res<ControlState>,
-    mut veil: Query<&mut BackgroundColor, With<DeathVeil>>,
+    mut veil: Query<(&mut DeathVeil, &mut BackgroundColor)>,
     mut title: Query<&mut TextColor, With<DeathVeilText>>,
 ) {
     let dead = !vitals.alive || control.pred_action == unbound_shared::ACTION_DEAD;
-    if let Ok(mut bg) = veil.single_mut() {
-        bg.0 = Color::srgba(0.04, 0.0, 0.0, if dead { 0.48 } else { 0.0 });
-    }
+    let Ok((mut veil, mut bg)) = veil.single_mut() else {
+        return;
+    };
+    veil.fade = unbound_shared::death_veil_mix(dead, veil.fade, time.delta_secs());
+    bg.0 = Color::srgba(0.04, 0.0, 0.0, unbound_shared::death_veil_bg_alpha(veil.fade));
     if let Ok(mut color) = title.single_mut() {
-        color.0 = Color::srgba(0.85, 0.18, 0.14, if dead { 1.0 } else { 0.0 });
+        color.0 = Color::srgba(0.85, 0.18, 0.14, unbound_shared::death_veil_text_alpha(veil.fade));
     }
 }
