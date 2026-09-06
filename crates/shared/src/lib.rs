@@ -878,6 +878,41 @@ mod tests {
     }
 
     #[test]
+    fn hotbar_flashes_when_a_bag_is_picked() {
+        assert!(HOTBAR_FLASH_TIME >= 0.14 && HOTBAR_FLASH_TIME <= 0.22);
+        let rest = hotbar_border_px(true, 0.0);
+        let pop = hotbar_border_px(true, HOTBAR_FLASH_TIME);
+        assert!((rest - HOTBAR_BORDER).abs() < 1e-4);
+        assert!(pop > rest);
+        assert!((pop - (HOTBAR_BORDER + HOTBAR_FLASH_EXTRA)).abs() < 1e-4);
+        let mid = hotbar_border_px(true, HOTBAR_FLASH_TIME * 0.5);
+        assert!(mid > rest && mid < pop);
+        assert!((hotbar_border_px(true, -0.5) - rest).abs() < 1e-4);
+        assert!((hotbar_border_px(true, HOTBAR_FLASH_TIME * 2.0) - pop).abs() < 1e-4);
+        assert!((hotbar_border_px(false, HOTBAR_FLASH_TIME) - HOTBAR_BORDER).abs() < 1e-4);
+        let (_, _, _, off) = hotbar_border_tint(0, false, HOTBAR_FLASH_TIME);
+        assert!((off - 0.45).abs() < 1e-4);
+        let (rr, rg, rb, ra) = hotbar_border_tint(0, true, 0.0);
+        let (kr, kg, kb, ka) = hotbar_border_tint(0, true, HOTBAR_FLASH_TIME);
+        assert!((ra - 1.0).abs() < 1e-4);
+        assert!(ka >= ra);
+        assert!(kr >= rr && kg >= rg && kb >= rb);
+        let (br, bg, bb, ba) = hotbar_bg_tint(true, true, 0.0);
+        let (fr, fg, fb, fa) = hotbar_bg_tint(true, true, HOTBAR_FLASH_TIME);
+        assert!(fr >= br && fg >= bg && fb >= bb && fa >= ba);
+        let off_bg = hotbar_bg_tint(false, false, HOTBAR_FLASH_TIME);
+        let off_rest = hotbar_bg_tint(false, false, 0.0);
+        assert!((off_bg.0 - off_rest.0).abs() < 1e-4);
+        assert!((off_bg.3 - off_rest.3).abs() < 1e-4);
+        assert!((hotbar_flash(0.0)).abs() < 1e-4);
+        assert!((hotbar_flash(HOTBAR_FLASH_TIME) - 1.0).abs() < 1e-4);
+        let bow = hotbar_border_tint(1, true, 0.0);
+        let staff = hotbar_border_tint(2, true, 0.0);
+        assert!(bow.0 > bow.1);
+        assert!(staff.2 > staff.1);
+    }
+
+    #[test]
     fn camera_push_out_leaves_the_shell() {
         let (x, y, z) = camera_push_out(0.1, 0.8, 0.0, 0.0, 0.8, 0.0, 1.0);
         let d = (x * x + (y - 0.8) * (y - 0.8) + z * z).sqrt();

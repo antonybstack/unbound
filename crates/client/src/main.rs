@@ -582,6 +582,7 @@ fn read_combat_input(
             control.sfx_draw = 1;
         }
         control.drawn = true;
+        control.hotbar_flash = unbound_shared::HOTBAR_FLASH_TIME;
     }
     if keys.just_pressed(KeyCode::Digit2) {
         control.loadout = 1;
@@ -589,6 +590,7 @@ fn read_combat_input(
             control.sfx_draw = 1;
         }
         control.drawn = true;
+        control.hotbar_flash = unbound_shared::HOTBAR_FLASH_TIME;
     }
     if keys.just_pressed(KeyCode::Digit3) {
         control.loadout = 2;
@@ -596,6 +598,7 @@ fn read_combat_input(
             control.sfx_draw = 1;
         }
         control.drawn = true;
+        control.hotbar_flash = unbound_shared::HOTBAR_FLASH_TIME;
     }
     if keys.just_pressed(KeyCode::Tab) {
         control.lock_on = !control.lock_on;
@@ -913,28 +916,22 @@ fn update_dummy_pip(
 
 fn update_hotbar(
     control: Res<ControlState>,
-    mut slots: Query<(&LoadoutSlot, &mut BorderColor, &mut BackgroundColor)>,
+    mut slots: Query<(
+        &LoadoutSlot,
+        &mut Node,
+        &mut BorderColor,
+        &mut BackgroundColor,
+    )>,
 ) {
-    for (slot, mut border, mut bg) in &mut slots {
+    let t = control.hotbar_flash;
+    for (slot, mut node, mut border, mut bg) in &mut slots {
         let on = slot.id == control.loadout;
         let drawn = on && control.drawn;
-        let tint = match slot.id {
-            1 => Color::srgb(0.62, 0.42, 0.22),
-            2 => Color::srgb(0.58, 0.38, 0.78),
-            _ => Color::srgb(0.78, 0.78, 0.82),
-        };
-        *border = BorderColor::all(if on {
-            tint
-        } else {
-            Color::srgba(0.35, 0.35, 0.38, 0.45)
-        });
-        bg.0 = if drawn {
-            Color::srgba(0.2, 0.16, 0.08, 0.88)
-        } else if on {
-            Color::srgba(0.1, 0.1, 0.12, 0.82)
-        } else {
-            Color::srgba(0.05, 0.05, 0.06, 0.55)
-        };
+        node.border = UiRect::all(Val::Px(unbound_shared::hotbar_border_px(on, t)));
+        let (r, g, b, a) = unbound_shared::hotbar_border_tint(slot.id, on, t);
+        *border = BorderColor::all(Color::srgba(r, g, b, a));
+        let (r, g, b, a) = unbound_shared::hotbar_bg_tint(on, drawn, t);
+        bg.0 = Color::srgba(r, g, b, a);
     }
 }
 

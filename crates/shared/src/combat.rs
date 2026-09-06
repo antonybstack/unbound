@@ -295,6 +295,9 @@ pub const DUMMY_PIP_SIZE: f32 = 10.0;
 pub const DUMMY_PIP_PULSE_TIME: f32 = 0.2;
 pub const DUMMY_PIP_PULSE_EXTRA: f32 = 8.0;
 pub const DUMMY_PIP_ALPHA: f32 = 0.9;
+pub const HOTBAR_FLASH_TIME: f32 = 0.18;
+pub const HOTBAR_BORDER: f32 = 1.5;
+pub const HOTBAR_FLASH_EXTRA: f32 = 1.5;
 pub const HYPERARMOR_FLASH_TIME: f32 = 0.18;
 pub const HYPERARMOR_FLASH_EMISSIVE: f32 = 8.0;
 pub const HYPERARMOR_FLASH_SCALE: f32 = 0.1;
@@ -645,6 +648,56 @@ pub fn dummy_pip_tint(visible: bool, t: f32) -> (f32, f32, f32, f32) {
         0.22 + k * 0.50,
         0.16 + k * 0.20,
         DUMMY_PIP_ALPHA + k * (1.0 - DUMMY_PIP_ALPHA),
+    )
+}
+
+/// 1 at bag pick, 0 at rest. Quadratic ease so the slot snaps then settles.
+pub fn hotbar_flash(t: f32) -> f32 {
+    let a = (t / HOTBAR_FLASH_TIME).clamp(0.0, 1.0);
+    a * a
+}
+
+/// Border px after 1/2/3. Thick at t=HOTBAR_FLASH_TIME, rest at HOTBAR_BORDER.
+/// Off slots stay at rest so only the picked bag pops.
+pub fn hotbar_border_px(on: bool, t: f32) -> f32 {
+    if !on {
+        return HOTBAR_BORDER;
+    }
+    HOTBAR_BORDER + hotbar_flash(t) * HOTBAR_FLASH_EXTRA
+}
+
+/// Off stays dim; on uses the bag color; flash goes white and opaque.
+pub fn hotbar_border_tint(id: u8, on: bool, t: f32) -> (f32, f32, f32, f32) {
+    if !on {
+        return (0.35, 0.35, 0.38, 0.45);
+    }
+    let (r, g, b) = match id {
+        1 => (0.62, 0.42, 0.22),
+        2 => (0.58, 0.38, 0.78),
+        _ => (0.78, 0.78, 0.82),
+    };
+    let k = hotbar_flash(t);
+    (r + (1.0 - r) * k, g + (1.0 - g) * k, b + (1.0 - b) * k, 1.0)
+}
+
+/// Rest slot fill; flash warms the picked bag. Off stays dim at any t.
+pub fn hotbar_bg_tint(on: bool, drawn: bool, t: f32) -> (f32, f32, f32, f32) {
+    let (r, g, b, a) = if drawn {
+        (0.2, 0.16, 0.08, 0.88)
+    } else if on {
+        (0.1, 0.1, 0.12, 0.82)
+    } else {
+        (0.05, 0.05, 0.06, 0.55)
+    };
+    if !on {
+        return (r, g, b, a);
+    }
+    let k = hotbar_flash(t);
+    (
+        r + (0.95 - r) * k * 0.55,
+        g + (0.90 - g) * k * 0.55,
+        b + (0.72 - b) * k * 0.55,
+        a + (1.0 - a) * k,
     )
 }
 

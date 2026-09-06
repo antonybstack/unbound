@@ -71,6 +71,7 @@ pub struct ControlState {
     pub lock_lost_at: Option<Vec3>,
     pub shot_kick: f32,
     pub pip_pulse: f32,
+    pub hotbar_flash: f32,
 }
 
 impl Default for ControlState {
@@ -117,6 +118,7 @@ impl Default for ControlState {
             lock_lost_at: None,
             shot_kick: 0.0,
             pip_pulse: 0.0,
+            hotbar_flash: 0.0,
         }
     }
 }
@@ -216,6 +218,7 @@ pub fn update_camera(
     }
     control.shot_kick = (control.shot_kick - dt).max(0.0);
     control.pip_pulse = (control.pip_pulse - dt).max(0.0);
+    control.hotbar_flash = (control.hotbar_flash - dt).max(0.0);
 
     let mut focus = control.cam_focus;
     if control.lock_on {
