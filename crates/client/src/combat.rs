@@ -2,15 +2,15 @@ use bevy::prelude::*;
 use bevy_stdb::prelude::*;
 use unbound_shared::{
     aim_dir, death_started, dodge_burst_dt, dodge_dir, dummy_body_scale, dummy_club_pitch,
-    dummy_telegraph_started, dummy_windup_ticks, hyperarmor, hyperarmor_flash_emissive,
-    hyperarmor_flash_scale, incoming_hit_shake, integrate, invulnerable_for, life_started, loadout,
-    melee_lunge_dt, merge_input_buttons, nameplate_alpha, node_mesh_scale, node_respawned,
-    node_restore_mix, predicted_busy_ticks, predicted_release_ticks, start_drawn_action,
-    start_gather_action, weapon_extra_rotation, ACTION_BLOCK, ACTION_DEAD, ACTION_DODGE,
-    ACTION_HEAVY, ACTION_HIT, ACTION_LIGHT, ACTION_NONE, BTN_BLOCK, BTN_DODGE, BTN_HEAVY,
-    BTN_LIGHT, BTN_SPRINT, DODGE_SPEED, GATHER_RANGE, HYPERARMOR_FLASH_TIME, MAX_HP, MAX_STAMINA,
-    MOVE_SPEED, PLAYER_HEIGHT, SHOT_CEILING_Y, SHOT_GROUND_Y, SHOT_SPAWN_Y, SPRINT_STAMINA_PER_SEC,
-    STAMINA_REGEN_PER_SEC, TICK_HZ,
+    dummy_heavy_slammed, dummy_telegraph_started, dummy_windup_ticks, hyperarmor,
+    hyperarmor_flash_emissive, hyperarmor_flash_scale, incoming_hit_shake, integrate,
+    invulnerable_for, life_started, loadout, melee_lunge_dt, merge_input_buttons, nameplate_alpha,
+    node_mesh_scale, node_respawned, node_restore_mix, predicted_busy_ticks,
+    predicted_release_ticks, start_drawn_action, start_gather_action, weapon_extra_rotation,
+    ACTION_BLOCK, ACTION_DEAD, ACTION_DODGE, ACTION_HEAVY, ACTION_HIT, ACTION_LIGHT, ACTION_NONE,
+    BTN_BLOCK, BTN_DODGE, BTN_HEAVY, BTN_LIGHT, BTN_SPRINT, DODGE_SPEED, GATHER_RANGE,
+    HYPERARMOR_FLASH_TIME, MAX_HP, MAX_STAMINA, MOVE_SPEED, PLAYER_HEIGHT, SHOT_CEILING_Y,
+    SHOT_GROUND_Y, SHOT_SPAWN_Y, SPRINT_STAMINA_PER_SEC, STAMINA_REGEN_PER_SEC, TICK_HZ,
 };
 
 use crate::camera::ControlState;
@@ -257,6 +257,22 @@ pub fn sync_dummy(
             ) {
                 control.sfx_dummy = if kind == ACTION_HEAVY { 2 } else { 1 };
                 control.pip_pulse = unbound_shared::DUMMY_PIP_PULSE_TIME;
+            }
+            if dummy_heavy_slammed(
+                pose.action,
+                pose.pending_hit,
+                msg.new.action,
+                msg.new.pending_hit,
+            ) {
+                let at = Vec3::new(msg.new.x, 0.0, msg.new.z);
+                spawn_dust(&mut commands, &mut meshes, &mut materials, at);
+                spawn_hit_spark(
+                    &mut commands,
+                    &mut meshes,
+                    &mut materials,
+                    at + Vec3::Y * 0.22,
+                    Color::srgb(0.82, 0.62, 0.28),
+                );
             }
             if death_started(pose.alive, msg.new.alive) {
                 control.sfx_death = true;

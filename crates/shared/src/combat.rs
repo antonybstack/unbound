@@ -413,6 +413,18 @@ pub fn dummy_telegraph_started(
     Some(new_action)
 }
 
+/// Club just hit the dirt. True only on the pending_hit true→false edge of a
+/// heavy into recover so windup ticks, a light poke, and a death drop do not
+/// re-fire. Telegraph is the raise; this is the slam.
+pub fn dummy_heavy_slammed(
+    prev_action: u8,
+    prev_pending: bool,
+    new_action: u8,
+    new_pending: bool,
+) -> bool {
+    prev_pending && !new_pending && prev_action == ACTION_HEAVY && new_action == ACTION_HIT
+}
+
 /// Body just dropped. True only on the alive true→false edge so respawn and
 /// staying dead do not re-fire.
 pub fn death_started(prev_alive: bool, new_alive: bool) -> bool {

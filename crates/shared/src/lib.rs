@@ -564,6 +564,18 @@ mod tests {
     }
 
     #[test]
+    fn dummy_heavy_slam_fires_once_on_impact() {
+        assert!(dummy_heavy_slammed(ACTION_HEAVY, true, ACTION_HIT, false));
+        assert!(!dummy_heavy_slammed(ACTION_HEAVY, true, ACTION_HEAVY, true));
+        assert!(!dummy_heavy_slammed(ACTION_NONE, false, ACTION_HEAVY, true));
+        assert!(!dummy_heavy_slammed(ACTION_LIGHT, true, ACTION_HIT, false));
+        assert!(!dummy_heavy_slammed(ACTION_HEAVY, true, ACTION_DEAD, false));
+        assert!(!dummy_heavy_slammed(ACTION_HIT, false, ACTION_HIT, false));
+        assert!(dummy_telegraph_started(ACTION_NONE, false, ACTION_HEAVY, true).is_some());
+        assert!(!dummy_heavy_slammed(ACTION_NONE, false, ACTION_HEAVY, true));
+    }
+
+    #[test]
     fn death_thud_fires_once_when_alive_falls() {
         assert!(death_started(true, false));
         assert!(!death_started(false, false));
