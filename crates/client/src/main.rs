@@ -3,6 +3,7 @@ mod combat;
 mod module_bindings;
 mod net;
 mod persist;
+mod sfx;
 
 use bevy::prelude::*;
 use bevy_stdb::prelude::*;
@@ -31,6 +32,7 @@ use crate::net::{
     send_input, spawn_pawns_from_cache, tick_remote_pose,
 };
 use crate::persist::persist_on_connect;
+use crate::sfx::{load_sfx, play_combat_sfx};
 
 pub type StdbConn = StdbConnection<DbConnection>;
 pub type StdbSubs = StdbSubscriptions<SubKey, RemoteModule>;
@@ -75,13 +77,29 @@ fn main() {
     }
 
     App::new()
-        .add_plugins(DefaultPlugins.set(WindowPlugin {
-            primary_window: Some(Window {
-                title: "Unbound".into(),
-                ..default()
-            }),
-            ..default()
-        }))
+        .add_plugins(
+            DefaultPlugins
+                .set(WindowPlugin {
+                    primary_window: Some(Window {
+                        title: "Unbound".into(),
+                        ..default()
+                    }),
+                    ..default()
+                })
+                .set(AssetPlugin {
+                    file_path: {
+                        #[cfg(target_arch = "wasm32")]
+                        {
+                            "assets".into()
+                        }
+                        #[cfg(not(target_arch = "wasm32"))]
+                        {
+                            format!("{}/assets", env!("CARGO_MANIFEST_DIR"))
+                        }
+                    },
+                    ..default()
+                }),
+        )
         .insert_resource(ClearColor(Color::srgb(0.52, 0.62, 0.72)))
         .insert_resource(GlobalAmbientLight {
             color: Color::srgb(0.85, 0.88, 0.95),
@@ -94,7 +112,7 @@ fn main() {
         .insert_resource(WeaponState::default())
         .insert_resource(HitFlash::default())
         .insert_resource(StamFlash::default())
-        .add_systems(Startup, (setup_scene, connect, setup_hud))
+        .add_systems(Startup, (setup_scene, connect, setup_hud, load_sfx))
         .add_systems(
             Update,
             (
@@ -153,6 +171,7 @@ fn main() {
                 update_crosshair,
                 update_death_veil,
                 update_hotbar,
+                play_combat_sfx,
             )
                 .chain(),
         )
