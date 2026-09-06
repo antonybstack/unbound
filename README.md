@@ -27,7 +27,7 @@ Browser (WebGPU):
 ```bash
 spacetime start --non-interactive   # if the host is down
 ./scripts/web.sh                    # http://127.0.0.1:8080 (debug wasm, ~180MB)
-./scripts/web-release.sh            # release WebGPU (~87MB raw / ~18MB gzip; wasm-opt if installed)
+./scripts/web-release.sh            # release WebGPU (~52MB after wasm-opt / ~14MB gzip)
 ```
 
 Open a second native or browser client to see another capsule interpolate in. Or prove the yard headless:
