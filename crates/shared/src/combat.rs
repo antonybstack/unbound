@@ -501,6 +501,15 @@ pub fn death_started(prev_alive: bool, new_alive: bool) -> bool {
     prev_alive && !new_alive
 }
 
+/// Dirt disk when a kill drops a body. Wider than a dodge or light poke so
+/// the fall reads heavier than a step-in. Hits, blocks, dodges, and gathers
+/// do not re-puff. Thud is the alive edge; this is the dirt on EVT_KILL.
+pub const DEATH_DUST_RADIUS: f32 = 0.62;
+
+pub fn death_dust(kind: u8) -> bool {
+    kind == 2
+}
+
 /// Body just stood up. True only on the alive false→true edge so idle living
 /// and the death fall do not re-fire.
 pub fn life_started(prev_alive: bool, new_alive: bool) -> bool {

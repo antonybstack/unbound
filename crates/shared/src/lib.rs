@@ -747,6 +747,20 @@ mod tests {
     }
 
     #[test]
+    fn death_dust_fires_on_kill_not_chip() {
+        assert!(death_dust(2));
+        assert!(!death_dust(1));
+        assert!(!death_dust(3));
+        assert!(!death_dust(4));
+        assert!(!death_dust(5));
+        assert!(!death_dust(6));
+        assert!(!death_dust(0));
+        assert!(DEATH_DUST_RADIUS > melee_lunge_dust_radius(ACTION_LIGHT, false));
+        assert!(DEATH_DUST_RADIUS > melee_lunge_dust_radius(ACTION_HEAVY, false));
+        assert!((DEATH_DUST_RADIUS - 0.62).abs() < 1e-5);
+    }
+
+    #[test]
     fn life_started_fires_once_when_dead_stands() {
         assert!(life_started(false, true));
         assert!(!life_started(true, true));
