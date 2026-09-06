@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 use bevy_stdb::prelude::*;
-use unbound_shared::{ACTION_DEAD, ACTION_DODGE, move_lock};
+use unbound_shared::{ACTION_DEAD, ACTION_DODGE, ACTION_HEAVY, dummy_telegraph_started, move_lock};
 
 use crate::StdbConn;
 use crate::module_bindings::{CombatEvent, Projectile};
@@ -174,6 +174,45 @@ pub fn play_remote_shot_sfx(
     }
 }
 
+/// Other wanderer's melee windup. Dummy already whooshes; a 1v1 was silent until connect.
+pub fn play_remote_swing_sfx(
+    mut commands: Commands,
+    sfx: Option<Res<Sfx>>,
+    local: Query<&Transform, With<LocalPlayer>>,
+    mut remotes: Query<(&ServerPose, &Transform, &mut RemoteStep), With<RemotePlayer>>,
+) {
+    let Some(sfx) = sfx else {
+        return;
+    };
+    let Ok(local_tf) = local.single() else {
+        return;
+    };
+    let lx = local_tf.translation.x;
+    let lz = local_tf.translation.z;
+    for (pose, tf, mut step) in &mut remotes {
+        if let Some(kind) = dummy_telegraph_started(
+            step.last_action,
+            step.last_pending,
+            pose.action,
+            pose.pending_hit,
+        ) {
+            let rdx = tf.translation.x - lx;
+            let rdz = tf.translation.z - lz;
+            let range = (rdx * rdx + rdz * rdz).sqrt();
+            if range < FOOT_MUTE {
+                let atten = if range <= FOOT_NEAR {
+                    1.0
+                } else {
+                    1.0 - (range - FOOT_NEAR) / (FOOT_MUTE - FOOT_NEAR)
+                };
+                play_swing_whoosh(&mut commands, &sfx, kind == ACTION_HEAVY, 0.8 * atten);
+            }
+        }
+        step.last_action = pose.action;
+        step.last_pending = pose.pending_hit;
+    }
+}
+
 const REMOTE_WALK_SPEED: f32 = 1.5;
 const REMOTE_SPRINT_SPEED: f32 = 6.5;
 const FOOT_NEAR: f32 = 12.0;
@@ -262,6 +301,21 @@ pub fn tick_remote_steps(
             base * 0.7 * atten,
         );
     }
+}
+
+fn play_swing_whoosh(commands: &mut Commands, sfx: &Sfx, heavy: bool, scale: f32) {
+    if scale <= 0.001 {
+        return;
+    }
+    let handle = if heavy {
+        sfx.heavy.clone()
+    } else {
+        sfx.dodge.clone()
+    };
+    let mut settings = PlaybackSettings::DESPAWN;
+    settings.volume = bevy::audio::Volume::Linear(if heavy { 0.38 } else { 0.26 } * scale);
+    settings.speed = if heavy { 0.85 } else { 1.35 };
+    commands.spawn((AudioPlayer::new(handle), settings));
 }
 
 fn play_shot_whoosh(commands: &mut Commands, sfx: &Sfx, staff: bool) {

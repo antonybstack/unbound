@@ -33,7 +33,8 @@ use crate::net::{
 };
 use crate::persist::persist_on_connect;
 use crate::sfx::{
-    load_sfx, play_combat_sfx, play_local_sfx, play_remote_shot_sfx, tick_remote_steps,
+    load_sfx, play_combat_sfx, play_local_sfx, play_remote_shot_sfx, play_remote_swing_sfx,
+    tick_remote_steps,
 };
 
 pub type StdbConn = StdbConnection<DbConnection>;
@@ -179,6 +180,7 @@ fn main() {
                 play_combat_sfx,
                 play_local_sfx,
                 play_remote_shot_sfx,
+                play_remote_swing_sfx,
                 tick_remote_steps,
             )
                 .chain(),
