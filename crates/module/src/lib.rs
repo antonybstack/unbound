@@ -735,6 +735,7 @@ fn separate_occupants(ctx: &ReducerContext) {
 fn tick_projectiles(ctx: &ReducerContext) {
     let shots: Vec<Projectile> = ctx.db.projectile().iter().collect();
     for mut shot in shots {
+        shot.vy -= unbound_shared::shot_gravity(shot.skill) * TICK_DT;
         shot.x += shot.vx * TICK_DT;
         shot.y += shot.vy * TICK_DT;
         shot.z += shot.vz * TICK_DT;

@@ -1,22 +1,22 @@
 use bevy::prelude::*;
 use bevy_stdb::prelude::*;
 use unbound_shared::{
-    aim_dir, dodge_burst_dt, dodge_dir, dodge_iframe, dummy_club_pitch, dummy_windup_ticks,
-    integrate, loadout, merge_input_buttons, predicted_busy_ticks, predicted_release_ticks,
-    start_drawn_action, start_gather_action, weapon_extra_rotation, ACTION_BLOCK, ACTION_DODGE,
-    ACTION_HEAVY, ACTION_HIT, ACTION_LIGHT, ACTION_NONE, BTN_BLOCK, BTN_DODGE, BTN_HEAVY,
-    BTN_LIGHT, BTN_SPRINT, DODGE_SPEED, GATHER_RANGE, MAX_HP, MAX_STAMINA, PLAYER_HEIGHT,
-    SHOT_CEILING_Y, SHOT_GROUND_Y, SHOT_SPAWN_Y, SPRINT_STAMINA_PER_SEC, STAMINA_REGEN_PER_SEC,
-    TICK_HZ,
+    ACTION_BLOCK, ACTION_DODGE, ACTION_HEAVY, ACTION_HIT, ACTION_LIGHT, ACTION_NONE, BTN_BLOCK,
+    BTN_DODGE, BTN_HEAVY, BTN_LIGHT, BTN_SPRINT, DODGE_SPEED, GATHER_RANGE, MAX_HP, MAX_STAMINA,
+    PLAYER_HEIGHT, SHOT_CEILING_Y, SHOT_GROUND_Y, SHOT_SPAWN_Y, SPRINT_STAMINA_PER_SEC,
+    STAMINA_REGEN_PER_SEC, TICK_HZ, aim_dir, dodge_burst_dt, dodge_dir, dodge_iframe,
+    dummy_club_pitch, dummy_windup_ticks, integrate, loadout, merge_input_buttons,
+    predicted_busy_ticks, predicted_release_ticks, start_drawn_action, start_gather_action,
+    weapon_extra_rotation,
 };
 
 use crate::camera::ControlState;
 use crate::module_bindings::{
+    Character, CharacterTableAccess, CombatEvent, Dummy, DummyTableAccess, GatherNode,
+    GatherNodeTableAccess, Player, PlayerTableAccess, Projectile, ProjectileTableAccess,
     character_table::characterQueryTableAccess, combat_event_table::combat_eventQueryTableAccess,
     dummy_table::dummyQueryTableAccess, gather_node_table::gather_nodeQueryTableAccess,
-    player_table::playerQueryTableAccess, projectile_table::projectileQueryTableAccess, Character,
-    CharacterTableAccess, CombatEvent, Dummy, DummyTableAccess, GatherNode, GatherNodeTableAccess,
-    Player, PlayerTableAccess, Projectile, ProjectileTableAccess,
+    player_table::playerQueryTableAccess, projectile_table::projectileQueryTableAccess,
 };
 use crate::net::{LocalPlayer, RemotePlayer, ServerPose};
 use crate::{MainCamera, StdbConn, StdbSubs, SubKey};
@@ -39,6 +39,7 @@ pub struct ShotPawn {
     pub vx: f32,
     pub vy: f32,
     pub vz: f32,
+    pub skill: u8,
 }
 
 #[derive(Component)]
@@ -46,6 +47,7 @@ pub struct PredictedShot {
     pub vx: f32,
     pub vy: f32,
     pub vz: f32,
+    pub skill: u8,
 }
 
 #[derive(Component)]
@@ -424,9 +426,10 @@ pub fn sync_projectiles(
     }
 }
 
-pub fn fly_shots(time: Res<Time>, mut shots: Query<(&ShotPawn, &mut Transform)>) {
+pub fn fly_shots(time: Res<Time>, mut shots: Query<(&mut ShotPawn, &mut Transform)>) {
     let dt = time.delta_secs();
-    for (shot, mut transform) in &mut shots {
+    for (mut shot, mut transform) in &mut shots {
+        shot.vy -= unbound_shared::shot_gravity(shot.skill) * dt;
         transform.translation.x += shot.vx * dt;
         transform.translation.y += shot.vy * dt;
         transform.translation.z += shot.vz * dt;
@@ -981,10 +984,11 @@ pub fn spawn_predicted_shots(
 pub fn fly_predicted_shots(
     time: Res<Time>,
     mut commands: Commands,
-    mut shots: Query<(Entity, &PredictedShot, &mut Transform)>,
+    mut shots: Query<(Entity, &mut PredictedShot, &mut Transform)>,
 ) {
     let dt = time.delta_secs();
-    for (e, shot, mut transform) in &mut shots {
+    for (e, mut shot, mut transform) in &mut shots {
+        shot.vy -= unbound_shared::shot_gravity(shot.skill) * dt;
         transform.translation.x += shot.vx * dt;
         transform.translation.y += shot.vy * dt;
         transform.translation.z += shot.vz * dt;
@@ -1378,9 +1382,9 @@ fn spawn_bolt(
         Color::srgb(0.85, 0.7, 0.25)
     };
     let mesh = if staff {
-        meshes.add(Sphere::new(0.14))
+        meshes.add(Sphere::new(0.22))
     } else {
-        meshes.add(Cuboid::new(0.07, 0.07, 0.55))
+        meshes.add(Cuboid::new(0.06, 0.06, 0.62))
     };
     let mut tf = Transform::from_xyz(x, y, z);
     aim_shot(&mut tf, vx, vy, vz);
@@ -1394,9 +1398,15 @@ fn spawn_bolt(
         tf,
     ));
     if predicted {
-        e.insert(PredictedShot { vx, vy, vz });
+        e.insert(PredictedShot { vx, vy, vz, skill });
     } else {
-        e.insert(ShotPawn { id, vx, vy, vz });
+        e.insert(ShotPawn {
+            id,
+            vx,
+            vy,
+            vz,
+            skill,
+        });
     }
 }
 

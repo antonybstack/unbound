@@ -117,6 +117,16 @@ pub fn aim_dir(yaw: f32, pitch: f32) -> (f32, f32, f32) {
 pub const SHOT_SPAWN_Y: f32 = 1.15;
 pub const SHOT_GROUND_Y: f32 = 0.08;
 pub const SHOT_CEILING_Y: f32 = 12.0;
+pub const BOW_GRAVITY: f32 = 2.2;
+pub const STAFF_GRAVITY: f32 = 24.0;
+
+pub fn shot_gravity(skill: u8) -> f32 {
+    if skill == SKILL_MAGIC {
+        STAFF_GRAVITY
+    } else {
+        BOW_GRAVITY
+    }
+}
 
 pub fn shot_hits_height(y: f32) -> bool {
     y > 0.2 && y < PLAYER_HEIGHT + 0.35
@@ -613,5 +623,11 @@ mod tests {
         assert!(!dummy_should_chase(false, 8.0));
         assert!(dummy_should_chase(false, 2.0));
         assert!(dummy_should_chase(true, 2.0));
+    }
+
+    #[test]
+    fn staff_bolts_drop_harder_than_arrows() {
+        assert!(shot_gravity(SKILL_MAGIC) > shot_gravity(SKILL_RANGED) * 5.0);
+        assert!(shot_gravity(SKILL_RANGED) > 0.0);
     }
 }
