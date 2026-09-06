@@ -13,12 +13,11 @@ use unbound_shared::{
 
 use crate::camera::{ControlState, update_camera, update_cursor};
 use crate::combat::{
-    DummyPawn, HitFlash, LocalVitals, WeaponState, apply_predicted_starts, flash_hits, fly_predicted_shots,
-    fly_shots, spawn_predicted_shots,
-    interpolate_dummy, pose_dummy_club, pose_hp_bars, pose_shields, pose_weapons,
-    refresh_remote_weapons, refresh_weapon, subscribe_world, sync_dummy, sync_nameplates,
-    sync_nodes, sync_projectiles, sync_vitals, tick_dummy_pose, tick_hit_flash, tick_prediction,
-    update_floaters, update_nameplates,
+    DummyPawn, HitFlash, LocalVitals, WeaponState, apply_predicted_starts, flash_hits,
+    fly_predicted_shots, fly_shots, interpolate_dummy, pose_dummy_club, pose_hp_bars, pose_shields,
+    pose_weapons, refresh_remote_weapons, refresh_weapon, spawn_predicted_shots, subscribe_world,
+    sync_dummy, sync_nameplates, sync_nodes, sync_projectiles, sync_vitals, tick_dummy_pose,
+    tick_dust, tick_hit_flash, tick_prediction, update_floaters, update_nameplates,
 };
 use crate::module_bindings::{
     CharacterTableAccessor, CombatEventTableAccessor, DbConnection, DummyTableAccessor,
@@ -123,6 +122,7 @@ fn main() {
                     tick_hit_flash,
                     read_combat_input,
                     apply_predicted_starts,
+                    tick_dust,
                     tick_prediction,
                     spawn_predicted_shots,
                     fly_predicted_shots,
@@ -138,6 +138,7 @@ fn main() {
                     update_hud,
                     update_crosshair,
                     update_death_veil,
+                    update_hotbar,
                 )
                     .chain(),
             )
@@ -166,6 +167,10 @@ struct Crosshair;
 struct DeathVeil;
 #[derive(Component)]
 struct DeathVeilText;
+#[derive(Component)]
+struct LoadoutSlot {
+    id: u8,
+}
 #[derive(Component)]
 pub struct MainCamera;
 
@@ -290,6 +295,52 @@ fn setup_hud(mut commands: Commands) {
                 TextLayout::no_wrap(),
                 HudLog,
             ));
+        });
+
+    commands
+        .spawn((
+            Node {
+                position_type: PositionType::Absolute,
+                bottom: Val::Px(18.0),
+                left: Val::Percent(50.0),
+                margin: UiRect {
+                    left: Val::Px(-168.0),
+                    ..default()
+                },
+                flex_direction: FlexDirection::Row,
+                column_gap: Val::Px(8.0),
+                ..default()
+            },
+            Pickable::IGNORE,
+        ))
+        .with_children(|row| {
+            for (id, label, tint) in [
+                (0u8, "1  Sword", Color::srgb(0.75, 0.75, 0.8)),
+                (1, "2  Bow", Color::srgb(0.55, 0.38, 0.2)),
+                (2, "3  Staff", Color::srgb(0.55, 0.35, 0.75)),
+            ] {
+                row.spawn((
+                    Node {
+                        width: Val::Px(108.0),
+                        height: Val::Px(34.0),
+                        justify_content: JustifyContent::Center,
+                        align_items: AlignItems::Center,
+                        border: UiRect::all(Val::Px(1.5)),
+                        ..default()
+                    },
+                    BackgroundColor(Color::srgba(0.05, 0.05, 0.06, 0.72)),
+                    BorderColor::all(tint),
+                    LoadoutSlot { id },
+                ))
+                .with_children(|slot| {
+                    slot.spawn((
+                        Text::new(label),
+                        TextFont::from_font_size(13.0),
+                        TextColor(Color::srgb(0.92, 0.9, 0.84)),
+                        TextLayout::no_wrap(),
+                    ));
+                });
+            }
         });
 
     commands.spawn((
@@ -566,6 +617,33 @@ fn update_crosshair(control: Res<ControlState>, mut q: Query<&mut BorderColor, W
     };
     let alpha = if control.drawn { 0.85 } else { 0.0 };
     *border = BorderColor::all(Color::srgba(0.95, 0.95, 0.88, alpha));
+}
+
+fn update_hotbar(
+    control: Res<ControlState>,
+    mut slots: Query<(&LoadoutSlot, &mut BorderColor, &mut BackgroundColor)>,
+) {
+    for (slot, mut border, mut bg) in &mut slots {
+        let on = slot.id == control.loadout;
+        let drawn = on && control.drawn;
+        let tint = match slot.id {
+            1 => Color::srgb(0.62, 0.42, 0.22),
+            2 => Color::srgb(0.58, 0.38, 0.78),
+            _ => Color::srgb(0.78, 0.78, 0.82),
+        };
+        *border = BorderColor::all(if on {
+            tint
+        } else {
+            Color::srgba(0.35, 0.35, 0.38, 0.45)
+        });
+        bg.0 = if drawn {
+            Color::srgba(0.2, 0.16, 0.08, 0.88)
+        } else if on {
+            Color::srgba(0.1, 0.1, 0.12, 0.82)
+        } else {
+            Color::srgba(0.05, 0.05, 0.06, 0.55)
+        };
+    }
 }
 
 fn update_death_veil(

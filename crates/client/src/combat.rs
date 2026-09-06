@@ -2,11 +2,11 @@ use bevy::prelude::*;
 use bevy_stdb::prelude::*;
 use unbound_shared::{
     ACTION_BLOCK, ACTION_DODGE, ACTION_HEAVY, ACTION_HIT, ACTION_LIGHT, ACTION_NONE, BTN_BLOCK,
-    BTN_SPRINT, DODGE_SPEED, GATHER_RANGE, MAX_HP, MAX_STAMINA, PLAYER_HEIGHT,
-    SHOT_CEILING_Y, SHOT_GROUND_Y, SHOT_SPAWN_Y, SPRINT_STAMINA_PER_SEC, STAMINA_REGEN_PER_SEC,
-    TICK_HZ, aim_dir, dodge_burst_dt, dodge_dir, dodge_iframe, dummy_club_pitch,
-    dummy_windup_ticks, integrate, loadout, merge_input_buttons, predicted_busy_ticks,
-    predicted_release_ticks, start_drawn_action, start_gather_action, weapon_extra_rotation,
+    BTN_SPRINT, DODGE_SPEED, GATHER_RANGE, MAX_HP, MAX_STAMINA, PLAYER_HEIGHT, SHOT_CEILING_Y,
+    SHOT_GROUND_Y, SHOT_SPAWN_Y, SPRINT_STAMINA_PER_SEC, STAMINA_REGEN_PER_SEC, TICK_HZ, aim_dir,
+    dodge_burst_dt, dodge_dir, dodge_iframe, dummy_club_pitch, dummy_windup_ticks, integrate,
+    loadout, merge_input_buttons, predicted_busy_ticks, predicted_release_ticks,
+    start_drawn_action, start_gather_action, weapon_extra_rotation,
 };
 
 use crate::camera::ControlState;
@@ -62,6 +62,11 @@ pub struct ShieldVisual {
 #[derive(Component)]
 pub struct DummyClub {
     pub rest: Transform,
+}
+
+#[derive(Component)]
+pub struct DustPuff {
+    pub age: f32,
 }
 
 #[derive(Component)]
@@ -678,6 +683,9 @@ pub fn tick_hit_flash(
 }
 
 pub fn apply_predicted_starts(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
     mut control: ResMut<ControlState>,
     vitals: Res<LocalVitals>,
     mut local: Query<&mut Transform, With<LocalPlayer>>,
@@ -734,8 +742,57 @@ pub fn apply_predicted_starts(
                 dodge_burst_dt(),
                 DODGE_SPEED,
             );
+            spawn_dust(
+                &mut commands,
+                &mut meshes,
+                &mut materials,
+                transform.translation,
+            );
             transform.translation.x = x;
             transform.translation.z = z;
+        }
+    }
+}
+
+fn spawn_dust(
+    commands: &mut Commands,
+    meshes: &mut Assets<Mesh>,
+    materials: &mut Assets<StandardMaterial>,
+    at: Vec3,
+) {
+    commands.spawn((
+        Mesh3d(meshes.add(Cylinder::new(0.45, 0.04))),
+        MeshMaterial3d(materials.add(StandardMaterial {
+            base_color: Color::srgba(0.62, 0.55, 0.4, 0.55),
+            alpha_mode: AlphaMode::Blend,
+            unlit: true,
+            ..default()
+        })),
+        Transform::from_xyz(at.x, 0.04, at.z),
+        DustPuff { age: 0.0 },
+    ));
+}
+
+pub fn tick_dust(
+    time: Res<Time>,
+    mut commands: Commands,
+    mut puffs: Query<(
+        Entity,
+        &mut DustPuff,
+        &mut Transform,
+        &MeshMaterial3d<StandardMaterial>,
+    )>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
+    for (e, mut puff, mut tf, mat) in &mut puffs {
+        puff.age += time.delta_secs();
+        let t = (puff.age / 0.35).clamp(0.0, 1.0);
+        tf.scale = Vec3::new(1.0 + t * 1.8, 1.0, 1.0 + t * 1.8);
+        if let Some(mut m) = materials.get_mut(&mat.0) {
+            m.base_color.set_alpha(0.5 * (1.0 - t));
+        }
+        if puff.age > 0.35 {
+            commands.entity(e).despawn();
         }
     }
 }
@@ -1178,18 +1235,8 @@ fn spawn_shot(
     shot: &Projectile,
 ) {
     spawn_bolt(
-        commands,
-        meshes,
-        materials,
-        shot.x,
-        shot.y,
-        shot.z,
-        shot.vx,
-        shot.vy,
-        shot.vz,
-        shot.skill,
-        false,
-        shot.id,
+        commands, meshes, materials, shot.x, shot.y, shot.z, shot.vx, shot.vy, shot.vz, shot.skill,
+        false, shot.id,
     );
 }
 
