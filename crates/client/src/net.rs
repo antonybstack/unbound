@@ -1,9 +1,9 @@
 use bevy::prelude::*;
 use bevy_stdb::prelude::*;
 use unbound_shared::{
-    death_started, integrate, merge_input_buttons, move_lock, ACTION_DEAD, ACTION_DODGE,
-    ACTION_HIT, ACTION_NONE, ACTION_SPAWN, BTN_SPRINT, DODGE_SPEED, INPUT_SEND_HZ, MOVE_SPEED,
-    PLAYER_HEIGHT, RECONCILE_SNAP, SPRINT_SPEED, TICK_HZ,
+    death_started, integrate, life_started, merge_input_buttons, move_lock, ACTION_DEAD,
+    ACTION_DODGE, ACTION_HIT, ACTION_NONE, ACTION_SPAWN, BTN_SPRINT, DODGE_SPEED, INPUT_SEND_HZ,
+    MOVE_SPEED, PLAYER_HEIGHT, RECONCILE_SNAP, SPRINT_SPEED, TICK_HZ,
 };
 
 use crate::camera::ControlState;
@@ -197,6 +197,9 @@ pub fn apply_player_updates(
             }
             if death_started(pose.alive, msg.new.alive) {
                 control.sfx_death = true;
+            }
+            if local.is_none() && life_started(pose.alive, msg.new.alive) {
+                control.sfx_rise = true;
             }
             pose.apply_row(&msg.new);
             if local.is_some() {

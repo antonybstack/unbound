@@ -60,6 +60,7 @@ pub struct ControlState {
     pub sfx_shot: u8,
     pub sfx_deplete: u8,
     pub sfx_death: bool,
+    pub sfx_rise: bool,
 }
 
 impl Default for ControlState {
@@ -97,6 +98,7 @@ impl Default for ControlState {
             sfx_shot: 0,
             sfx_deplete: 0,
             sfx_death: false,
+            sfx_rise: false,
         }
     }
 }

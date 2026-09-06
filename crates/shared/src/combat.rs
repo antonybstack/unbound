@@ -325,6 +325,12 @@ pub fn death_started(prev_alive: bool, new_alive: bool) -> bool {
     prev_alive && !new_alive
 }
 
+/// Body just stood up. True only on the alive false→true edge so idle living
+/// and the death fall do not re-fire.
+pub fn life_started(prev_alive: bool, new_alive: bool) -> bool {
+    !prev_alive && new_alive
+}
+
 /// +1 chase, 0 hold the pocket, -1 step back. Dummy should not glue to the player.
 pub fn dummy_move_dir(dist: f32) -> f32 {
     if dist > DUMMY_APPROACH {

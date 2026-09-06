@@ -162,6 +162,14 @@ pub fn play_local_sfx(
         commands.spawn((AudioPlayer::new(sfx.brk.clone()), settings));
         control.sfx_death = false;
     }
+    if control.sfx_rise {
+        // Local walk-out already stings on ACTION_SPAWN. Dummy and other wanderers stood up silent.
+        let mut settings = PlaybackSettings::DESPAWN;
+        settings.volume = bevy::audio::Volume::Linear(0.36);
+        settings.speed = 0.92;
+        commands.spawn((AudioPlayer::new(sfx.kill.clone()), settings));
+        control.sfx_rise = false;
+    }
     if control.sfx_lock != 0 {
         let acquire = control.sfx_lock > 0;
         let mut settings = PlaybackSettings::DESPAWN;

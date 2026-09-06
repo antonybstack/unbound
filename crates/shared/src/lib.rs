@@ -552,6 +552,14 @@ mod tests {
     }
 
     #[test]
+    fn life_started_fires_once_when_dead_stands() {
+        assert!(life_started(false, true));
+        assert!(!life_started(true, true));
+        assert!(!life_started(false, false));
+        assert!(!life_started(true, false));
+    }
+
+    #[test]
     fn gather_requires_range_and_button() {
         assert!(start_gather_action(ACTION_NONE, BTN_INTERACT, false).is_none());
         let start = start_gather_action(ACTION_NONE, BTN_INTERACT, true).unwrap();
