@@ -133,6 +133,20 @@ pub fn play_local_sfx(
         commands.spawn((AudioPlayer::new(sfx.brk.clone()), settings));
         control.sfx_deplete = 0;
     }
+    if control.sfx_respawn != 0 {
+        // Flattened stump already popped back. Quieter higher gather/break so it isn't another crack.
+        let ore = control.sfx_respawn == 2;
+        let mut settings = PlaybackSettings::DESPAWN;
+        settings.volume = bevy::audio::Volume::Linear(if ore { 0.26 } else { 0.22 });
+        settings.speed = if ore { 1.55 } else { 1.42 };
+        let handle = if ore {
+            sfx.brk.clone()
+        } else {
+            sfx.gather.clone()
+        };
+        commands.spawn((AudioPlayer::new(handle), settings));
+        control.sfx_respawn = 0;
+    }
     if control.sfx_block {
         // Predicted raise: air sweep. Rim clack stays on a blocked hit.
         let mut settings = PlaybackSettings::DESPAWN;

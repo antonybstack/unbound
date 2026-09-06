@@ -4,7 +4,8 @@ use unbound_shared::{
     aim_dir, death_started, dodge_burst_dt, dodge_dir, dummy_body_scale, dummy_club_pitch,
     dummy_telegraph_started, dummy_windup_ticks, hyperarmor, hyperarmor_flash_emissive,
     hyperarmor_flash_scale, incoming_hit_shake, integrate, invulnerable_for, life_started, loadout,
-    melee_lunge_dt, merge_input_buttons, predicted_busy_ticks, predicted_release_ticks,
+    melee_lunge_dt, merge_input_buttons, node_respawned, predicted_busy_ticks,
+    predicted_release_ticks,
     start_drawn_action, start_gather_action, weapon_extra_rotation, ACTION_BLOCK, ACTION_DEAD,
     ACTION_DODGE, ACTION_HEAVY, ACTION_HIT, ACTION_LIGHT, ACTION_NONE, BTN_BLOCK, BTN_DODGE,
     BTN_HEAVY, BTN_LIGHT, BTN_SPRINT, DODGE_SPEED, GATHER_RANGE, HYPERARMOR_FLASH_TIME, MAX_HP,
@@ -539,6 +540,7 @@ pub fn sync_nodes(
                 continue;
             }
             let emptied = node.charges > 0 && msg.new.charges == 0;
+            let returned = node_respawned(node.charges, msg.new.charges);
             node.charges = msg.new.charges;
             let depleted = msg.new.charges == 0;
             transform.scale = if depleted {
@@ -549,29 +551,41 @@ pub fn sync_nodes(
             if let Some(mut m) = materials.get_mut(&mat.0) {
                 m.base_color = node_color(msg.new.kind, depleted);
             }
-            if emptied {
+            if emptied || returned {
                 let at = transform.translation;
                 let color = if msg.new.kind == 1 {
                     Color::srgb(0.78, 0.84, 0.92)
                 } else {
                     Color::srgb(0.62, 0.88, 0.42)
                 };
-                spawn_hit_spark(
-                    &mut commands,
-                    &mut meshes,
-                    &mut materials,
-                    at + Vec3::Y * 0.35,
-                    color,
-                );
-                spawn_hit_spark(
-                    &mut commands,
-                    &mut meshes,
-                    &mut materials,
-                    at + Vec3::new(0.22, 0.12, 0.08),
-                    color,
-                );
-                spawn_dust(&mut commands, &mut meshes, &mut materials, at);
-                control.sfx_deplete = if msg.new.kind == 1 { 2 } else { 1 };
+                if emptied {
+                    spawn_hit_spark(
+                        &mut commands,
+                        &mut meshes,
+                        &mut materials,
+                        at + Vec3::Y * 0.35,
+                        color,
+                    );
+                    spawn_hit_spark(
+                        &mut commands,
+                        &mut meshes,
+                        &mut materials,
+                        at + Vec3::new(0.22, 0.12, 0.08),
+                        color,
+                    );
+                    spawn_dust(&mut commands, &mut meshes, &mut materials, at);
+                    control.sfx_deplete = if msg.new.kind == 1 { 2 } else { 1 };
+                }
+                if returned {
+                    spawn_hit_spark(
+                        &mut commands,
+                        &mut meshes,
+                        &mut materials,
+                        at + Vec3::Y * 0.25,
+                        color,
+                    );
+                    control.sfx_respawn = if msg.new.kind == 1 { 2 } else { 1 };
+                }
             }
         }
     }

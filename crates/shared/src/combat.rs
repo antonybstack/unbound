@@ -369,6 +369,12 @@ pub fn life_started(prev_alive: bool, new_alive: bool) -> bool {
     !prev_alive && new_alive
 }
 
+/// Charges just came back. True only on the 0→positive edge so cooldown ticks
+/// and a full node do not re-fire.
+pub fn node_respawned(prev_charges: u8, new_charges: u8) -> bool {
+    prev_charges == 0 && new_charges > 0
+}
+
 /// +1 chase, 0 hold the pocket, -1 step back. Dummy should not glue to the player.
 pub fn dummy_move_dir(dist: f32) -> f32 {
     if dist > DUMMY_APPROACH {

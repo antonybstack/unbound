@@ -580,6 +580,17 @@ mod tests {
     }
 
     #[test]
+    fn node_respawn_fires_once_when_charges_return() {
+        assert!(node_respawned(0, 4));
+        assert!(node_respawned(0, 3));
+        assert!(!node_respawned(0, 0));
+        assert!(!node_respawned(4, 4));
+        assert!(!node_respawned(3, 3));
+        assert!(!node_respawned(4, 3));
+        assert!(!node_respawned(1, 0));
+    }
+
+    #[test]
     fn gather_requires_range_and_button() {
         assert!(start_gather_action(ACTION_NONE, BTN_INTERACT, false).is_none());
         let start = start_gather_action(ACTION_NONE, BTN_INTERACT, true).unwrap();
