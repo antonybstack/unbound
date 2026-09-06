@@ -337,6 +337,16 @@ pub fn dodge_burst_dt() -> f32 {
     TICK_DT * dodge_ticks() as f32 * 0.35
 }
 
+/// Ticks left on a predicted attack when the projectile/melee should release.
+pub fn predicted_release_ticks(action: u8, loadout_id: u8) -> u8 {
+    let def = loadout(loadout_id);
+    match action {
+        ACTION_HEAVY => def.heavy_recover_ticks,
+        ACTION_LIGHT => def.light_recover_ticks,
+        _ => 0,
+    }
+}
+
 /// Client-side busy window: attacks include recover so the chop plays through.
 pub fn predicted_busy_ticks(start: &ActionStart) -> u8 {
     let def = loadout(start.loadout);

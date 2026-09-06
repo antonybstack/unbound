@@ -29,6 +29,7 @@ pub struct ControlState {
     pub cam_dist: f32,
     pub shake: f32,
     pub lock_focus: Option<Vec3>,
+    pub pred_shot: bool,
 }
 
 impl Default for ControlState {
@@ -51,6 +52,7 @@ impl Default for ControlState {
             cam_dist: CAM_SHEATHED,
             shake: 0.0,
             lock_focus: None,
+            pred_shot: false,
         }
     }
 }

@@ -3,9 +3,10 @@ use bevy_stdb::prelude::*;
 use unbound_shared::{
     ACTION_BLOCK, ACTION_DODGE, ACTION_HEAVY, ACTION_HIT, ACTION_LIGHT, ACTION_NONE, BTN_BLOCK,
     BTN_SPRINT, DODGE_SPEED, GATHER_RANGE, MAX_HP, MAX_STAMINA, PLAYER_HEIGHT,
-    SPRINT_STAMINA_PER_SEC, STAMINA_REGEN_PER_SEC, TICK_HZ, dodge_burst_dt, dodge_dir,
-    dodge_iframe, dummy_club_pitch, dummy_windup_ticks, integrate, loadout, merge_input_buttons,
-    predicted_busy_ticks, start_drawn_action, start_gather_action, weapon_extra_rotation,
+    SHOT_CEILING_Y, SHOT_GROUND_Y, SHOT_SPAWN_Y, SPRINT_STAMINA_PER_SEC, STAMINA_REGEN_PER_SEC,
+    TICK_HZ, aim_dir, dodge_burst_dt, dodge_dir, dodge_iframe, dummy_club_pitch,
+    dummy_windup_ticks, integrate, loadout, merge_input_buttons, predicted_busy_ticks,
+    predicted_release_ticks, start_drawn_action, start_gather_action, weapon_extra_rotation,
 };
 
 use crate::camera::ControlState;
@@ -34,6 +35,13 @@ pub struct Nameplate {
 #[derive(Component)]
 pub struct ShotPawn {
     pub id: u32,
+    pub vx: f32,
+    pub vy: f32,
+    pub vz: f32,
+}
+
+#[derive(Component)]
+pub struct PredictedShot {
     pub vx: f32,
     pub vy: f32,
     pub vz: f32,
@@ -347,6 +355,7 @@ pub fn sync_projectiles(
     mut deletes: ReadDeleteMessage<Projectile>,
     conn: Option<Res<StdbConn>>,
     mut shots: Query<(Entity, &mut ShotPawn, &mut Transform)>,
+    ghosts: Query<(Entity, &Transform), (With<PredictedShot>, Without<ShotPawn>)>,
 ) {
     if let Some(conn) = conn.as_ref() {
         for row in conn.db().projectile().iter() {
@@ -361,6 +370,14 @@ pub fn sync_projectiles(
             continue;
         }
         spawn_shot(&mut commands, &mut meshes, &mut materials, &msg.row);
+        // Authoritative bolt arrived; drop the local ghost so we don't draw two.
+        for (e, ghost) in ghosts.iter() {
+            let dx = ghost.translation.x - msg.row.x;
+            let dz = ghost.translation.z - msg.row.z;
+            if dx * dx + dz * dz < 16.0 {
+                commands.entity(e).despawn();
+            }
+        }
     }
     for msg in updates.read() {
         for (_, mut shot, mut transform) in &mut shots {
@@ -702,6 +719,9 @@ pub fn apply_predicted_starts(
     if start.action != unbound_shared::ACTION_GATHER {
         control.pred_stamina = start.stamina;
     }
+    if start.pending_hit && loadout(start.loadout).is_projectile {
+        control.pred_shot = true;
+    }
     if start.action == ACTION_DODGE {
         if let Ok(mut transform) = local.single_mut() {
             let (dx, dz) = dodge_dir(control.dir_x, control.dir_z);
@@ -736,6 +756,72 @@ pub fn tick_prediction(time: Res<Time>, mut control: ResMut<ControlState>) {
         control.pred_stamina = (control.pred_stamina - SPRINT_STAMINA_PER_SEC * dt).max(0.0);
     } else if control.pred_action != ACTION_DODGE && control.pred_action != ACTION_BLOCK {
         control.pred_stamina = (control.pred_stamina + STAMINA_REGEN_PER_SEC * dt).min(MAX_STAMINA);
+    }
+}
+
+pub fn spawn_predicted_shots(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut control: ResMut<ControlState>,
+    local: Query<&Transform, With<LocalPlayer>>,
+) {
+    if !control.pred_shot {
+        return;
+    }
+    let def = loadout(control.pred_loadout);
+    if !def.is_projectile {
+        control.pred_shot = false;
+        return;
+    }
+    if control.pred_action != ACTION_LIGHT && control.pred_action != ACTION_HEAVY {
+        return;
+    }
+    let release = predicted_release_ticks(control.pred_action, control.pred_loadout) as f32;
+    if control.pred_ticks > release {
+        return;
+    }
+    let Ok(tf) = local.single() else {
+        return;
+    };
+    let (fx, fy, fz) = aim_dir(control.yaw, control.pitch);
+    let speed = def.projectile_speed;
+    let skill = if def.id == 2 { 2 } else { 1 };
+    spawn_bolt(
+        &mut commands,
+        &mut meshes,
+        &mut materials,
+        tf.translation.x + fx * 0.9,
+        SHOT_SPAWN_Y + fy * 0.4,
+        tf.translation.z + fz * 0.9,
+        fx * speed,
+        fy * speed,
+        fz * speed,
+        skill,
+        true,
+        0,
+    );
+    control.pred_shot = false;
+}
+
+pub fn fly_predicted_shots(
+    time: Res<Time>,
+    mut commands: Commands,
+    mut shots: Query<(Entity, &PredictedShot, &mut Transform)>,
+) {
+    let dt = time.delta_secs();
+    for (e, shot, mut transform) in &mut shots {
+        transform.translation.x += shot.vx * dt;
+        transform.translation.y += shot.vy * dt;
+        transform.translation.z += shot.vz * dt;
+        aim_shot(&mut transform, shot.vx, shot.vy, shot.vz);
+        if transform.translation.y < SHOT_GROUND_Y
+            || transform.translation.y > SHOT_CEILING_Y
+            || transform.translation.x.abs() > 40.0
+            || transform.translation.z.abs() > 40.0
+        {
+            commands.entity(e).despawn();
+        }
     }
 }
 
@@ -1091,7 +1177,37 @@ fn spawn_shot(
     materials: &mut Assets<StandardMaterial>,
     shot: &Projectile,
 ) {
-    let staff = shot.skill == 2;
+    spawn_bolt(
+        commands,
+        meshes,
+        materials,
+        shot.x,
+        shot.y,
+        shot.z,
+        shot.vx,
+        shot.vy,
+        shot.vz,
+        shot.skill,
+        false,
+        shot.id,
+    );
+}
+
+fn spawn_bolt(
+    commands: &mut Commands,
+    meshes: &mut Assets<Mesh>,
+    materials: &mut Assets<StandardMaterial>,
+    x: f32,
+    y: f32,
+    z: f32,
+    vx: f32,
+    vy: f32,
+    vz: f32,
+    skill: u8,
+    predicted: bool,
+    id: u32,
+) {
+    let staff = skill == 2;
     let color = if staff {
         Color::srgb(0.55, 0.35, 0.95)
     } else {
@@ -1102,9 +1218,9 @@ fn spawn_shot(
     } else {
         meshes.add(Cuboid::new(0.07, 0.07, 0.55))
     };
-    let mut tf = Transform::from_xyz(shot.x, shot.y, shot.z);
-    aim_shot(&mut tf, shot.vx, shot.vy, shot.vz);
-    commands.spawn((
+    let mut tf = Transform::from_xyz(x, y, z);
+    aim_shot(&mut tf, vx, vy, vz);
+    let mut e = commands.spawn((
         Mesh3d(mesh),
         MeshMaterial3d(materials.add(StandardMaterial {
             base_color: color,
@@ -1112,13 +1228,12 @@ fn spawn_shot(
             ..default()
         })),
         tf,
-        ShotPawn {
-            id: shot.id,
-            vx: shot.vx,
-            vy: shot.vy,
-            vz: shot.vz,
-        },
     ));
+    if predicted {
+        e.insert(PredictedShot { vx, vy, vz });
+    } else {
+        e.insert(ShotPawn { id, vx, vy, vz });
+    }
 }
 
 fn spawn_node(

@@ -412,6 +412,16 @@ mod tests {
             predicted_busy_ticks(&start),
             SWORD.heavy_windup_ticks + SWORD.heavy_recover_ticks
         );
+        assert_eq!(
+            predicted_release_ticks(ACTION_LIGHT, LOADOUT_BOW),
+            BOW.light_recover_ticks
+        );
+        assert!(
+            predicted_busy_ticks(
+                &start_drawn_action(ACTION_NONE, LOADOUT_BOW, LOADOUT_BOW, 100.0, BTN_LIGHT)
+                    .unwrap()
+            ) > predicted_release_ticks(ACTION_LIGHT, LOADOUT_BOW)
+        );
     }
 
     #[test]

@@ -13,7 +13,8 @@ use unbound_shared::{
 
 use crate::camera::{ControlState, update_camera, update_cursor};
 use crate::combat::{
-    DummyPawn, HitFlash, LocalVitals, WeaponState, apply_predicted_starts, flash_hits, fly_shots,
+    DummyPawn, HitFlash, LocalVitals, WeaponState, apply_predicted_starts, flash_hits, fly_predicted_shots,
+    fly_shots, spawn_predicted_shots,
     interpolate_dummy, pose_dummy_club, pose_hp_bars, pose_shields, pose_weapons,
     refresh_remote_weapons, refresh_weapon, subscribe_world, sync_dummy, sync_nameplates,
     sync_nodes, sync_projectiles, sync_vitals, tick_dummy_pose, tick_hit_flash, tick_prediction,
@@ -123,6 +124,8 @@ fn main() {
                     read_combat_input,
                     apply_predicted_starts,
                     tick_prediction,
+                    spawn_predicted_shots,
+                    fly_predicted_shots,
                     predict_local,
                     send_input,
                     refresh_weapon,
