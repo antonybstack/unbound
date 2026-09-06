@@ -113,7 +113,7 @@ sql "SELECT name, x, z, hp, stamina, loadout, alive FROM player"
 echo "-- dummy --"
 sql "SELECT id, x, z, hp, alive, action FROM dummy"
 echo "-- characters --"
-sql "SELECT name, melee_xp, ranged_xp, magic_xp, defence_xp, hitpoints_xp, gather_xp FROM character"
+sql "SELECT name, melee_xp, ranged_xp, magic_xp, defence_xp, hitpoints_xp, gather_xp, loadout FROM character"
 echo "-- nodes --"
 sql "SELECT id, kind, x, z, charges, cooldown FROM gather_node"
 echo

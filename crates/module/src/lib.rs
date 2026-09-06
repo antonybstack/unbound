@@ -65,6 +65,8 @@ pub struct Character {
     pub defence_xp: u64,
     pub hitpoints_xp: u64,
     pub gather_xp: u64,
+    #[default(0)]
+    pub loadout: u8,
 }
 
 #[table(accessor = dummy, public)]
@@ -273,6 +275,11 @@ pub fn set_input(
 
     if ctx.db.player().identity().find(&identity).is_none() {
         let character = ensure_character(ctx, identity);
+        let spawn_loadout = if character.loadout <= 2 {
+            character.loadout
+        } else {
+            LOADOUT_SWORD
+        };
         ctx.db.player().insert(Player {
             identity,
             x: spawn_x(identity),
@@ -282,7 +289,7 @@ pub fn set_input(
             drawn,
             hp: MAX_HP,
             stamina: MAX_STAMINA,
-            loadout,
+            loadout: spawn_loadout,
             action: ACTION_NONE,
             action_ticks: 0,
             pending_hit: false,
@@ -406,6 +413,7 @@ fn tick_players(ctx: &ReducerContext) {
             player.hp = (player.hp + HP_REGEN_PER_SEC * TICK_DT).min(MAX_HP);
         }
 
+        persist_loadout(ctx, player.identity, player.loadout);
         ctx.db.player().identity().update(player);
     }
 }
@@ -1155,6 +1163,17 @@ fn ensure_character(ctx: &ReducerContext, identity: Identity) -> Character {
     }
 }
 
+fn persist_loadout(ctx: &ReducerContext, identity: Identity, loadout: u8) {
+    let Some(mut c) = ctx.db.character().identity().find(&identity) else {
+        return;
+    };
+    if c.loadout == loadout {
+        return;
+    }
+    c.loadout = loadout;
+    ctx.db.character().identity().update(c);
+}
+
 fn default_character(identity: Identity, name: String) -> Character {
     Character {
         identity,
@@ -1165,6 +1184,7 @@ fn default_character(identity: Identity, name: String) -> Character {
         defence_xp: 0,
         hitpoints_xp: 0,
         gather_xp: 0,
+        loadout: LOADOUT_SWORD,
     }
 }
 

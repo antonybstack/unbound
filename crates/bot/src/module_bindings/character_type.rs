@@ -15,6 +15,7 @@ pub struct Character {
     pub defence_xp: u64,
     pub hitpoints_xp: u64,
     pub gather_xp: u64,
+    pub loadout: u8,
 }
 
 impl __sdk::InModule for Character {
@@ -33,6 +34,7 @@ pub struct CharacterCols {
     pub defence_xp: __sdk::__query_builder::Col<Character, u64>,
     pub hitpoints_xp: __sdk::__query_builder::Col<Character, u64>,
     pub gather_xp: __sdk::__query_builder::Col<Character, u64>,
+    pub loadout: __sdk::__query_builder::Col<Character, u8>,
 }
 
 impl __sdk::__query_builder::HasCols for Character {
@@ -47,6 +49,7 @@ impl __sdk::__query_builder::HasCols for Character {
             defence_xp: __sdk::__query_builder::Col::new(table_name, "defence_xp"),
             hitpoints_xp: __sdk::__query_builder::Col::new(table_name, "hitpoints_xp"),
             gather_xp: __sdk::__query_builder::Col::new(table_name, "gather_xp"),
+            loadout: __sdk::__query_builder::Col::new(table_name, "loadout"),
         }
     }
 }

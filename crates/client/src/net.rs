@@ -97,6 +97,7 @@ pub fn bind_local_player(
     control.pred_stamina = player.stamina;
     control.pred_action = player.action;
     control.pred_ticks = player.action_ticks as f32;
+    control.loadout = player.loadout;
     control.pred_loadout = player.loadout;
     commands.entity(entity).insert((
         NetworkedIdentity {
