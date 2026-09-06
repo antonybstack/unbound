@@ -444,6 +444,21 @@ mod tests {
     }
 
     #[test]
+    fn melee_lunge_steps_in() {
+        let light = melee_lunge_dt(ACTION_LIGHT, false);
+        let heavy = melee_lunge_dt(ACTION_HEAVY, false);
+        assert!(light > 0.0);
+        assert!(heavy > light);
+        assert_eq!(melee_lunge_dt(ACTION_LIGHT, true), 0.0);
+        assert_eq!(melee_lunge_dt(ACTION_DODGE, false), 0.0);
+        let (_, lz) = move_offset(0.0, 0.0, 1.0, light, MOVE_SPEED);
+        let (_, hz) = move_offset(0.0, 0.0, 1.0, heavy, MOVE_SPEED);
+        assert!(lz < -0.4);
+        assert!(hz < lz);
+        assert!(hz.abs() < DODGE_SPEED * dodge_burst_dt());
+    }
+
+    #[test]
     fn dodge_costs_stamina_and_defaults_forward() {
         let start = start_drawn_action(ACTION_NONE, LOADOUT_SWORD, LOADOUT_SWORD, 100.0, BTN_DODGE)
             .expect("dodge");

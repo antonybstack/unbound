@@ -479,6 +479,18 @@ pub fn dodge_burst_dt() -> f32 {
     TICK_DT * dodge_ticks() as f32 * 0.35
 }
 
+/// Forward step on a melee swing. Heavies commit further; bows and staffs stay planted.
+pub fn melee_lunge_dt(action: u8, is_projectile: bool) -> f32 {
+    if is_projectile {
+        return 0.0;
+    }
+    match action {
+        ACTION_HEAVY => TICK_DT * 3.5,
+        ACTION_LIGHT => TICK_DT * 2.0,
+        _ => 0.0,
+    }
+}
+
 /// Ticks left on a predicted attack when the projectile/melee should release.
 pub fn predicted_release_ticks(action: u8, loadout_id: u8) -> u8 {
     let def = loadout(loadout_id);

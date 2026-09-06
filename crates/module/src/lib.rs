@@ -13,9 +13,9 @@ use unbound_shared::{
     aim_dir, dist_xz, dodge_burst_dt, dodge_dir, dummy_cooldown_ticks, dummy_heavy_windup,
     dummy_light_windup, dummy_move_dir, dummy_recover_ticks, facing_dot, guard_break_ticks,
     hitstun_ticks, hp_regen_ok, hyperarmor, integrate, invulnerable_for, knockback, loadout,
-    move_lock, node_respawn_ticks, node_xp, push_apart, resolve_guard, scaled_damage,
-    shot_hits_height, skill_for_loadout, skill_level, stamina_regen_ok, start_drawn_action,
-    start_gather_action, swing_locks_facing,
+    melee_lunge_dt, move_lock, node_respawn_ticks, node_xp, push_apart, resolve_guard,
+    scaled_damage, shot_hits_height, skill_for_loadout, skill_level, stamina_regen_ok,
+    start_drawn_action, start_gather_action, swing_locks_facing,
 };
 
 #[table(accessor = player, public)]
@@ -438,6 +438,13 @@ fn try_start_player_action(_ctx: &ReducerContext, player: &mut Player, input: &P
         );
         player.x = x;
         player.z = z;
+    } else if start.pending_hit {
+        let dt = melee_lunge_dt(start.action, loadout(start.loadout).is_projectile);
+        if dt > 0.0 {
+            let (x, z) = integrate(player.x, player.z, input.yaw, 0.0, 1.0, dt, MOVE_SPEED);
+            player.x = x;
+            player.z = z;
+        }
     }
 }
 

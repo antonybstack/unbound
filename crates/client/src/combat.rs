@@ -3,9 +3,9 @@ use bevy_stdb::prelude::*;
 use unbound_shared::{
     ACTION_BLOCK, ACTION_DODGE, ACTION_HEAVY, ACTION_HIT, ACTION_LIGHT, ACTION_NONE, BTN_BLOCK,
     BTN_DODGE, BTN_HEAVY, BTN_LIGHT, BTN_SPRINT, DODGE_SPEED, GATHER_RANGE, MAX_HP, MAX_STAMINA,
-    PLAYER_HEIGHT, SHOT_CEILING_Y, SHOT_GROUND_Y, SHOT_SPAWN_Y, SPRINT_STAMINA_PER_SEC,
+    MOVE_SPEED, PLAYER_HEIGHT, SHOT_CEILING_Y, SHOT_GROUND_Y, SHOT_SPAWN_Y, SPRINT_STAMINA_PER_SEC,
     STAMINA_REGEN_PER_SEC, TICK_HZ, aim_dir, dodge_burst_dt, dodge_dir, dodge_iframe_for,
-    dummy_club_pitch, dummy_windup_ticks, integrate, loadout, merge_input_buttons,
+    dummy_club_pitch, dummy_windup_ticks, integrate, loadout, melee_lunge_dt, merge_input_buttons,
     predicted_busy_ticks, predicted_release_ticks, start_drawn_action, start_gather_action,
     weapon_extra_rotation,
 };
@@ -893,6 +893,23 @@ pub fn apply_predicted_starts(
             );
             transform.translation.x = x;
             transform.translation.z = z;
+        }
+    } else if start.pending_hit {
+        let dt = melee_lunge_dt(start.action, loadout(start.loadout).is_projectile);
+        if dt > 0.0 {
+            if let Ok(mut transform) = local.single_mut() {
+                let (x, z) = integrate(
+                    transform.translation.x,
+                    transform.translation.z,
+                    control.yaw,
+                    0.0,
+                    1.0,
+                    dt,
+                    MOVE_SPEED,
+                );
+                transform.translation.x = x;
+                transform.translation.z = z;
+            }
         }
     }
 }
