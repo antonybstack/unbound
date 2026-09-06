@@ -531,6 +531,35 @@ mod tests {
     }
 
     #[test]
+    fn stamina_holds_through_a_swing() {
+        assert!(!stamina_regen_ok(ACTION_LIGHT));
+        assert!(!stamina_regen_ok(ACTION_HEAVY));
+        assert!(!stamina_regen_ok(ACTION_HIT));
+        assert!(!stamina_regen_ok(ACTION_DODGE));
+        assert!(!stamina_regen_ok(ACTION_BLOCK));
+        assert!(!stamina_regen_ok(ACTION_SWAP));
+        assert!(stamina_regen_ok(ACTION_NONE));
+    }
+
+    #[test]
+    fn committed_heavies_have_hyperarmor() {
+        assert!(hyperarmor(ACTION_HEAVY, true, false));
+        assert!(!hyperarmor(ACTION_HEAVY, false, false));
+        assert!(!hyperarmor(ACTION_LIGHT, true, false));
+        assert!(hyperarmor(ACTION_LIGHT, true, true));
+        assert!(hyperarmor(ACTION_HEAVY, true, true));
+        assert!(!hyperarmor(ACTION_NONE, false, true));
+        assert!(!hyperarmor(ACTION_HIT, false, true));
+        assert!(HYPERARMOR_KNOCKBACK < 0.5);
+    }
+
+    #[test]
+    fn dummy_holds_the_slam() {
+        assert!(dummy_recover_ticks() >= 6);
+        assert!(dummy_club_pitch(ACTION_HIT, dummy_recover_ticks() as f32, 12.0) > 0.2);
+    }
+
+    #[test]
     fn block_only_on_sword() {
         assert!(
             start_drawn_action(ACTION_NONE, LOADOUT_BOW, LOADOUT_BOW, 100.0, BTN_BLOCK).is_none()

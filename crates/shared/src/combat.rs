@@ -314,6 +314,31 @@ pub fn hp_regen_ok(action: u8) -> bool {
     !action_busy(action) && action != ACTION_BLOCK
 }
 
+/// Stamina waits for the swing, roll, block, or stun to finish — Souls pacing.
+pub fn stamina_regen_ok(action: u8) -> bool {
+    hp_regen_ok(action)
+}
+
+/// Knockback while a committed strike is in the air. Enough to read, not enough to miss.
+pub const HYPERARMOR_KNOCKBACK: f32 = 0.2;
+
+/// Dummy windups and player heavies don't flinch. Lights still do.
+pub fn hyperarmor(action: u8, pending_hit: bool, dummy: bool) -> bool {
+    if !pending_hit {
+        return false;
+    }
+    if dummy {
+        action == ACTION_LIGHT || action == ACTION_HEAVY
+    } else {
+        action == ACTION_HEAVY
+    }
+}
+
+/// Hold the club at the bottom of the slam so the impact reads.
+pub fn dummy_recover_ticks() -> u8 {
+    8
+}
+
 pub fn merge_input_buttons(held: u32, latched: u32) -> u32 {
     held | latched
 }

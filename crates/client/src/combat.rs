@@ -1,22 +1,22 @@
 use bevy::prelude::*;
 use bevy_stdb::prelude::*;
 use unbound_shared::{
-    ACTION_BLOCK, ACTION_DODGE, ACTION_HEAVY, ACTION_HIT, ACTION_LIGHT, ACTION_NONE, BTN_BLOCK,
-    BTN_DODGE, BTN_HEAVY, BTN_LIGHT, BTN_SPRINT, DODGE_SPEED, GATHER_RANGE, MAX_HP, MAX_STAMINA,
-    PLAYER_HEIGHT, SHOT_CEILING_Y, SHOT_GROUND_Y, SHOT_SPAWN_Y, SPRINT_STAMINA_PER_SEC,
-    STAMINA_REGEN_PER_SEC, TICK_HZ, aim_dir, dodge_burst_dt, dodge_dir, dodge_iframe,
-    dummy_club_pitch, dummy_windup_ticks, integrate, loadout, merge_input_buttons,
-    predicted_busy_ticks, predicted_release_ticks, start_drawn_action, start_gather_action,
-    weapon_extra_rotation,
+    aim_dir, dodge_burst_dt, dodge_dir, dodge_iframe, dummy_club_pitch, dummy_windup_ticks,
+    integrate, loadout, merge_input_buttons, predicted_busy_ticks, predicted_release_ticks,
+    start_drawn_action, start_gather_action, weapon_extra_rotation, ACTION_BLOCK, ACTION_DODGE,
+    ACTION_HEAVY, ACTION_HIT, ACTION_LIGHT, ACTION_NONE, BTN_BLOCK, BTN_DODGE, BTN_HEAVY,
+    BTN_LIGHT, BTN_SPRINT, DODGE_SPEED, GATHER_RANGE, MAX_HP, MAX_STAMINA, PLAYER_HEIGHT,
+    SHOT_CEILING_Y, SHOT_GROUND_Y, SHOT_SPAWN_Y, SPRINT_STAMINA_PER_SEC, STAMINA_REGEN_PER_SEC,
+    TICK_HZ,
 };
 
 use crate::camera::ControlState;
 use crate::module_bindings::{
-    Character, CharacterTableAccess, CombatEvent, Dummy, DummyTableAccess, GatherNode,
-    GatherNodeTableAccess, Player, PlayerTableAccess, Projectile, ProjectileTableAccess,
     character_table::characterQueryTableAccess, combat_event_table::combat_eventQueryTableAccess,
     dummy_table::dummyQueryTableAccess, gather_node_table::gather_nodeQueryTableAccess,
-    player_table::playerQueryTableAccess, projectile_table::projectileQueryTableAccess,
+    player_table::playerQueryTableAccess, projectile_table::projectileQueryTableAccess, Character,
+    CharacterTableAccess, CombatEvent, Dummy, DummyTableAccess, GatherNode, GatherNodeTableAccess,
+    Player, PlayerTableAccess, Projectile, ProjectileTableAccess,
 };
 use crate::net::{LocalPlayer, RemotePlayer, ServerPose};
 use crate::{MainCamera, StdbConn, StdbSubs, SubKey};
@@ -931,7 +931,7 @@ pub fn tick_prediction(time: Res<Time>, mut control: ResMut<ControlState>) {
         && !unbound_shared::move_lock(control.pred_action);
     if sprinting {
         control.pred_stamina = (control.pred_stamina - SPRINT_STAMINA_PER_SEC * dt).max(0.0);
-    } else if control.pred_action != ACTION_DODGE && control.pred_action != ACTION_BLOCK {
+    } else if unbound_shared::stamina_regen_ok(control.pred_action) {
         control.pred_stamina = (control.pred_stamina + STAMINA_REGEN_PER_SEC * dt).min(MAX_STAMINA);
     }
 }

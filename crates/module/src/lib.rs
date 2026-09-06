@@ -3,18 +3,18 @@ use std::time::Duration;
 use spacetimedb::{table, Identity, ReducerContext, ScheduleAt, Table};
 use unbound_shared::{
     action_busy, aim_dir, dist_xz, dodge_burst_dt, dodge_dir, dummy_cooldown_ticks,
-    dummy_heavy_windup, dummy_light_windup, dummy_move_dir, facing_dot, guard_break_ticks,
-    hitstun_ticks, hp_regen_ok, integrate, invulnerable, knockback, loadout, move_lock,
-    node_respawn_ticks, node_xp, push_apart, resolve_guard, scaled_damage, shot_hits_height,
-    skill_for_loadout, skill_level, start_drawn_action, start_gather_action, GuardResult,
-    ACTION_BLOCK, ACTION_DEAD, ACTION_DODGE, ACTION_GATHER, ACTION_HEAVY, ACTION_HIT, ACTION_LIGHT,
-    ACTION_NONE, BODY_SEPARATION, BTN_BLOCK, BTN_SPRINT, DODGE_SPEED, DUMMY_AGGRO_RANGE,
-    DUMMY_CHASE_SPEED, DUMMY_HEAVY_DAMAGE, DUMMY_HOME_SPEED, DUMMY_LEASH_RANGE, DUMMY_LIGHT_DAMAGE,
-    DUMMY_MELEE_RANGE, DUMMY_STRIKE_RANGE, GATHER_RANGE, HP_REGEN_PER_SEC, KNOCKBACK_HEAVY,
-    KNOCKBACK_LIGHT, LOADOUT_SWORD, MAX_HP, MAX_STAMINA, MOVE_SPEED, NODE_ORE, PLAYER_RADIUS,
-    SHOT_CEILING_Y, SHOT_GROUND_Y, SHOT_SPAWN_Y, SKILL_DEFENCE, SKILL_GATHERING, SKILL_HITPOINTS,
-    SKILL_MAGIC, SKILL_MELEE, SKILL_RANGED, SPRINT_SPEED, SPRINT_STAMINA_PER_SEC,
-    STAMINA_REGEN_PER_SEC, TICK_DT, WORLD_HALF,
+    dummy_heavy_windup, dummy_light_windup, dummy_move_dir, dummy_recover_ticks, facing_dot,
+    guard_break_ticks, hitstun_ticks, hp_regen_ok, hyperarmor, integrate, invulnerable, knockback,
+    loadout, move_lock, node_respawn_ticks, node_xp, push_apart, resolve_guard, scaled_damage,
+    shot_hits_height, skill_for_loadout, skill_level, stamina_regen_ok, start_drawn_action,
+    start_gather_action, GuardResult, ACTION_BLOCK, ACTION_DEAD, ACTION_DODGE, ACTION_GATHER,
+    ACTION_HEAVY, ACTION_HIT, ACTION_LIGHT, ACTION_NONE, BODY_SEPARATION, BTN_BLOCK, BTN_SPRINT,
+    DODGE_SPEED, DUMMY_AGGRO_RANGE, DUMMY_CHASE_SPEED, DUMMY_HEAVY_DAMAGE, DUMMY_HOME_SPEED,
+    DUMMY_LEASH_RANGE, DUMMY_LIGHT_DAMAGE, DUMMY_MELEE_RANGE, DUMMY_STRIKE_RANGE, GATHER_RANGE,
+    HP_REGEN_PER_SEC, HYPERARMOR_KNOCKBACK, KNOCKBACK_HEAVY, KNOCKBACK_LIGHT, LOADOUT_SWORD,
+    MAX_HP, MAX_STAMINA, MOVE_SPEED, NODE_ORE, PLAYER_RADIUS, SHOT_CEILING_Y, SHOT_GROUND_Y,
+    SHOT_SPAWN_Y, SKILL_DEFENCE, SKILL_GATHERING, SKILL_HITPOINTS, SKILL_MAGIC, SKILL_MELEE,
+    SKILL_RANGED, SPRINT_SPEED, SPRINT_STAMINA_PER_SEC, STAMINA_REGEN_PER_SEC, TICK_DT, WORLD_HALF,
 };
 
 #[table(accessor = player, public)]
@@ -398,7 +398,7 @@ fn tick_players(ctx: &ReducerContext) {
 
         if sprinting {
             player.stamina = (player.stamina - SPRINT_STAMINA_PER_SEC * TICK_DT).max(0.0);
-        } else if player.action != ACTION_DODGE && player.action != ACTION_BLOCK {
+        } else if stamina_regen_ok(player.action) {
             player.stamina = (player.stamina + STAMINA_REGEN_PER_SEC * TICK_DT).min(MAX_STAMINA);
         }
         if player.hp < MAX_HP && hp_regen_ok(player.action) {
@@ -602,8 +602,11 @@ fn tick_dummy(ctx: &ReducerContext) {
             },
         );
         dummy.pending_hit = false;
-        dummy.action = ACTION_NONE;
+        dummy.action = ACTION_HIT;
+        dummy.action_ticks = dummy_recover_ticks();
         dummy.cooldown = dummy_cooldown_ticks();
+    } else if dummy.action_ticks == 0 && dummy.action != ACTION_NONE && dummy.alive {
+        dummy.action = ACTION_NONE;
     }
     if dummy.cooldown > 0 {
         dummy.cooldown -= 1;
@@ -844,8 +847,10 @@ fn melee_strike(
                 let dz = dummy.z - z;
                 let dist = (dx * dx + dz * dz).sqrt();
                 if dist <= range + 0.4 && facing_dot(yaw, dx, dz) > 0.25 {
+                    let armored = hyperarmor(dummy.action, dummy.pending_hit, true);
                     apply_dummy_damage(ctx, &mut dummy, damage, attacker, skill);
-                    let (nx, nz) = knockback(dummy.x, dummy.z, x, z, kb * 0.6);
+                    let mul = if armored { HYPERARMOR_KNOCKBACK } else { 0.6 };
+                    let (nx, nz) = knockback(dummy.x, dummy.z, x, z, kb * mul);
                     dummy.x = nx;
                     dummy.z = nz;
                     ctx.db.dummy().id().update(dummy);
@@ -910,6 +915,7 @@ fn apply_player_damage(
         );
         return;
     }
+    let armored = hyperarmor(victim.action, victim.pending_hit, false);
     let guard = resolve_guard(
         victim.action,
         victim.yaw,
@@ -945,7 +951,12 @@ fn apply_player_damage(
     dealt *= 1.0 - 0.01 * def_lvl as f32;
     dealt = dealt.max(1.0);
     victim.hp -= dealt;
-    let (nx, nz) = knockback(victim.x, victim.z, from_x, from_z, kb * guard.knockback_mul);
+    let kb_mul = if armored {
+        HYPERARMOR_KNOCKBACK
+    } else {
+        guard.knockback_mul
+    };
+    let (nx, nz) = knockback(victim.x, victim.z, from_x, from_z, kb * kb_mul);
     victim.x = nx;
     victim.z = nz;
     grant_xp(ctx, victim.identity, SKILL_DEFENCE, 4);
@@ -973,7 +984,7 @@ fn apply_player_damage(
             victim.z,
         );
     } else {
-        if guard.hitstun {
+        if guard.hitstun && !armored {
             victim.action = ACTION_HIT;
             victim.action_ticks = if guard.result == GuardResult::GuardBreak {
                 guard_break_ticks()
@@ -1030,9 +1041,11 @@ fn apply_dummy_damage(
             dummy.z,
         );
     } else {
-        dummy.action = ACTION_HIT;
-        dummy.action_ticks = hitstun_ticks();
-        dummy.pending_hit = false;
+        if !hyperarmor(dummy.action, dummy.pending_hit, true) {
+            dummy.action = ACTION_HIT;
+            dummy.action_ticks = hitstun_ticks();
+            dummy.pending_hit = false;
+        }
         emit(
             ctx,
             EVT_HIT,
