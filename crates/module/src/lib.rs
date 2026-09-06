@@ -2,20 +2,19 @@ use std::time::Duration;
 
 use spacetimedb::{table, Identity, ReducerContext, ScheduleAt, Table};
 use unbound_shared::{
-    action_busy, blocking, dist_xz, dodge_burst_dt, dodge_dir, dummy_cooldown_ticks,
-    dummy_heavy_windup, dummy_light_windup, dummy_move_dir, facing_dot, hitstun_ticks, hp_regen_ok,
-    integrate, invulnerable,
-    knockback, loadout, move_lock, node_respawn_ticks, node_xp, push_apart, scaled_damage,
-    shot_hits_height, skill_for_loadout, skill_level, start_drawn_action, start_gather_action,
-    aim_dir, SHOT_CEILING_Y, SHOT_GROUND_Y, SHOT_SPAWN_Y,
+    action_busy, aim_dir, dist_xz, dodge_burst_dt, dodge_dir, dummy_cooldown_ticks,
+    dummy_heavy_windup, dummy_light_windup, dummy_move_dir, facing_dot, guard_break_ticks,
+    hitstun_ticks, hp_regen_ok, integrate, invulnerable, knockback, loadout, move_lock,
+    node_respawn_ticks, node_xp, push_apart, resolve_guard, scaled_damage, shot_hits_height,
+    skill_for_loadout, skill_level, start_drawn_action, start_gather_action, GuardResult,
     ACTION_BLOCK, ACTION_DEAD, ACTION_DODGE, ACTION_GATHER, ACTION_HEAVY, ACTION_HIT, ACTION_LIGHT,
-    ACTION_NONE, BODY_SEPARATION, BTN_BLOCK, BTN_SPRINT, DODGE_SPEED,
-    DUMMY_AGGRO_RANGE, DUMMY_CHASE_SPEED, DUMMY_HEAVY_DAMAGE, DUMMY_HOME_SPEED, DUMMY_LEASH_RANGE,
-    DUMMY_LIGHT_DAMAGE, DUMMY_MELEE_RANGE, DUMMY_STRIKE_RANGE, GATHER_RANGE, HP_REGEN_PER_SEC,
-    KNOCKBACK_HEAVY, KNOCKBACK_LIGHT, LOADOUT_SWORD, MAX_HP, MAX_STAMINA, MOVE_SPEED, NODE_ORE,
-    PLAYER_RADIUS, SKILL_DEFENCE, SKILL_GATHERING, SKILL_HITPOINTS, SKILL_MAGIC,
-    SKILL_MELEE, SKILL_RANGED, SPRINT_SPEED, SPRINT_STAMINA_PER_SEC, STAMINA_REGEN_PER_SEC, TICK_DT,
-    WORLD_HALF,
+    ACTION_NONE, BODY_SEPARATION, BTN_BLOCK, BTN_SPRINT, DODGE_SPEED, DUMMY_AGGRO_RANGE,
+    DUMMY_CHASE_SPEED, DUMMY_HEAVY_DAMAGE, DUMMY_HOME_SPEED, DUMMY_LEASH_RANGE, DUMMY_LIGHT_DAMAGE,
+    DUMMY_MELEE_RANGE, DUMMY_STRIKE_RANGE, GATHER_RANGE, HP_REGEN_PER_SEC, KNOCKBACK_HEAVY,
+    KNOCKBACK_LIGHT, LOADOUT_SWORD, MAX_HP, MAX_STAMINA, MOVE_SPEED, NODE_ORE, PLAYER_RADIUS,
+    SHOT_CEILING_Y, SHOT_GROUND_Y, SHOT_SPAWN_Y, SKILL_DEFENCE, SKILL_GATHERING, SKILL_HITPOINTS,
+    SKILL_MAGIC, SKILL_MELEE, SKILL_RANGED, SPRINT_SPEED, SPRINT_STAMINA_PER_SEC,
+    STAMINA_REGEN_PER_SEC, TICK_DT, WORLD_HALF,
 };
 
 #[table(accessor = player, public)]
@@ -145,6 +144,7 @@ const EVT_KILL: u8 = 2;
 const EVT_BLOCK: u8 = 3;
 const EVT_DODGE: u8 = 4;
 const EVT_GATHER: u8 = 5;
+const EVT_GUARD_BREAK: u8 = 6;
 const DUMMY_ID: u32 = 1;
 const DUMMY_HOME_X: f32 = 0.0;
 const DUMMY_HOME_Z: f32 = -10.0;
@@ -716,13 +716,8 @@ fn separate_occupants(ctx: &ReducerContext) {
                 if !p.alive {
                     continue;
                 }
-                let (dx, dz, px, pz) = push_apart(
-                    dummy.x,
-                    dummy.z,
-                    p.x,
-                    p.z,
-                    BODY_SEPARATION + 0.15,
-                );
+                let (dx, dz, px, pz) =
+                    push_apart(dummy.x, dummy.z, p.x, p.z, BODY_SEPARATION + 0.15);
                 dummy.x = dx;
                 dummy.z = dz;
                 p.x = px;
@@ -870,7 +865,16 @@ fn melee_strike(
         let dist = (dx * dx + dz * dz).sqrt();
         if dist <= range + PLAYER_RADIUS && facing_dot(yaw, dx, dz) > 0.2 {
             apply_player_damage(
-                ctx, &mut victim, damage, from_dummy, attacker, dummy_id, skill, x, z, kb,
+                ctx,
+                &mut victim,
+                damage,
+                from_dummy,
+                attacker,
+                dummy_id,
+                skill,
+                x,
+                z,
+                kb,
             );
             ctx.db.player().identity().update(victim);
         }
@@ -905,13 +909,26 @@ fn apply_player_damage(
         );
         return;
     }
-    let mut dealt = damage;
-    if blocking(victim.action) {
-        dealt *= 0.3;
-        victim.stamina = (victim.stamina - 8.0).max(0.0);
+    let guard = resolve_guard(
+        victim.action,
+        victim.yaw,
+        victim.x,
+        victim.z,
+        from_x,
+        from_z,
+        victim.stamina,
+    );
+    let mut dealt = damage * guard.damage_mul;
+    victim.stamina = guard.stamina_after;
+    let guard_evt = match guard.result {
+        GuardResult::Covered => Some(EVT_BLOCK),
+        GuardResult::GuardBreak => Some(EVT_GUARD_BREAK),
+        GuardResult::Open | GuardResult::OpenFlank => None,
+    };
+    if let Some(kind) = guard_evt {
         emit(
             ctx,
-            EVT_BLOCK,
+            kind,
             from_dummy,
             attacker,
             dummy_id,
@@ -927,7 +944,7 @@ fn apply_player_damage(
     dealt *= 1.0 - 0.01 * def_lvl as f32;
     dealt = dealt.max(1.0);
     victim.hp -= dealt;
-    let (nx, nz) = knockback(victim.x, victim.z, from_x, from_z, kb);
+    let (nx, nz) = knockback(victim.x, victim.z, from_x, from_z, kb * guard.knockback_mul);
     victim.x = nx;
     victim.z = nz;
     grant_xp(ctx, victim.identity, SKILL_DEFENCE, 4);
@@ -955,24 +972,30 @@ fn apply_player_damage(
             victim.z,
         );
     } else {
-        if !blocking(victim.action) {
+        if guard.hitstun {
             victim.action = ACTION_HIT;
-            victim.action_ticks = hitstun_ticks();
+            victim.action_ticks = if guard.result == GuardResult::GuardBreak {
+                guard_break_ticks()
+            } else {
+                hitstun_ticks()
+            };
             victim.pending_hit = false;
         }
-        emit(
-            ctx,
-            EVT_HIT,
-            from_dummy,
-            attacker,
-            dummy_id,
-            false,
-            victim.identity,
-            0,
-            dealt,
-            victim.x,
-            victim.z,
-        );
+        if guard_evt.is_none() {
+            emit(
+                ctx,
+                EVT_HIT,
+                from_dummy,
+                attacker,
+                dummy_id,
+                false,
+                victim.identity,
+                0,
+                dealt,
+                victim.x,
+                victim.z,
+            );
+        }
     }
 }
 
@@ -1139,5 +1162,3 @@ fn respawn_player(player: &mut Player) {
     player.z = 6.0;
     player.yaw = 0.0;
 }
-
-

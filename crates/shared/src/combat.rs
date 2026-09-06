@@ -1,7 +1,7 @@
 use crate::{
-    ACTION_BLOCK, ACTION_DEAD, ACTION_DODGE, ACTION_GATHER, ACTION_HEAVY, ACTION_HIT, ACTION_LIGHT,
-    ACTION_SWAP, BTN_BLOCK, BTN_DODGE, BTN_HEAVY, BTN_INTERACT, BTN_LIGHT, LOADOUT_BOW,
-    LOADOUT_STAFF, LOADOUT_SWORD, TICK_DT, TICK_HZ,
+    facing_dot, ACTION_BLOCK, ACTION_DEAD, ACTION_DODGE, ACTION_GATHER, ACTION_HEAVY, ACTION_HIT,
+    ACTION_LIGHT, ACTION_SWAP, BTN_BLOCK, BTN_DODGE, BTN_HEAVY, BTN_INTERACT, BTN_LIGHT,
+    LOADOUT_BOW, LOADOUT_STAFF, LOADOUT_SWORD, TICK_DT, TICK_HZ,
 };
 
 #[derive(Clone, Copy, Debug)]
@@ -132,6 +132,85 @@ pub fn move_lock(action: u8) -> bool {
 
 pub fn blocking(action: u8) -> bool {
     action == ACTION_BLOCK
+}
+
+/// Cosine of the shield arc. ~78° half-angle, same as the melee strike cone.
+pub const BLOCK_COVER_DOT: f32 = 0.2;
+pub const BLOCK_CHIP: f32 = 0.3;
+pub const BLOCK_STAMINA_HIT: f32 = 8.0;
+
+pub fn guard_break_ticks() -> u8 {
+    10
+}
+
+/// True when the victim's facing covers the attacker (front cone).
+pub fn block_covers(yaw: f32, x: f32, z: f32, from_x: f32, from_z: f32) -> bool {
+    facing_dot(yaw, from_x - x, from_z - z) > BLOCK_COVER_DOT
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GuardResult {
+    Open,
+    Covered,
+    GuardBreak,
+    OpenFlank,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct GuardHit {
+    pub result: GuardResult,
+    pub damage_mul: f32,
+    pub stamina_after: f32,
+    pub knockback_mul: f32,
+    pub hitstun: bool,
+}
+
+/// Shield only works while you face the blow. Empty stamina shatters the guard.
+pub fn resolve_guard(
+    action: u8,
+    yaw: f32,
+    x: f32,
+    z: f32,
+    from_x: f32,
+    from_z: f32,
+    stamina: f32,
+) -> GuardHit {
+    if !blocking(action) {
+        return GuardHit {
+            result: GuardResult::Open,
+            damage_mul: 1.0,
+            stamina_after: stamina,
+            knockback_mul: 1.0,
+            hitstun: true,
+        };
+    }
+    if !block_covers(yaw, x, z, from_x, from_z) {
+        return GuardHit {
+            result: GuardResult::OpenFlank,
+            damage_mul: 1.0,
+            stamina_after: stamina,
+            knockback_mul: 1.0,
+            hitstun: true,
+        };
+    }
+    let after = (stamina - BLOCK_STAMINA_HIT).max(0.0);
+    if after <= 0.01 {
+        GuardHit {
+            result: GuardResult::GuardBreak,
+            damage_mul: BLOCK_CHIP,
+            stamina_after: 0.0,
+            knockback_mul: 1.5,
+            hitstun: true,
+        }
+    } else {
+        GuardHit {
+            result: GuardResult::Covered,
+            damage_mul: BLOCK_CHIP,
+            stamina_after: after,
+            knockback_mul: 0.2,
+            hitstun: false,
+        }
+    }
 }
 
 pub fn dodge_iframe(ticks_left: u8) -> bool {
@@ -282,13 +361,16 @@ pub fn start_drawn_action(
         return None;
     }
     if (buttons & BTN_BLOCK) != 0 && current_loadout == LOADOUT_SWORD {
-        return Some(ActionStart {
-            action: ACTION_BLOCK,
-            ticks: 1,
-            stamina,
-            pending_hit: false,
-            loadout: current_loadout,
-        });
+        if stamina > 0.5 {
+            return Some(ActionStart {
+                action: ACTION_BLOCK,
+                ticks: 1,
+                stamina,
+                pending_hit: false,
+                loadout: current_loadout,
+            });
+        }
+        return None;
     }
     let def = loadout(current_loadout);
     if (buttons & BTN_HEAVY) != 0 && stamina_ok(stamina, def.heavy_stamina) {

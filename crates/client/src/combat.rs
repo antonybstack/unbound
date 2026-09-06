@@ -1,22 +1,22 @@
 use bevy::prelude::*;
 use bevy_stdb::prelude::*;
 use unbound_shared::{
-    ACTION_BLOCK, ACTION_DODGE, ACTION_HEAVY, ACTION_HIT, ACTION_LIGHT, ACTION_NONE, BTN_BLOCK,
-    BTN_DODGE, BTN_HEAVY, BTN_LIGHT, BTN_SPRINT, DODGE_SPEED, GATHER_RANGE, MAX_HP, MAX_STAMINA,
-    PLAYER_HEIGHT, SHOT_CEILING_Y, SHOT_GROUND_Y, SHOT_SPAWN_Y, SPRINT_STAMINA_PER_SEC,
-    STAMINA_REGEN_PER_SEC, TICK_HZ, aim_dir, dodge_burst_dt, dodge_dir, dodge_iframe,
-    dummy_club_pitch, dummy_windup_ticks, integrate, loadout, merge_input_buttons,
-    predicted_busy_ticks, predicted_release_ticks, start_drawn_action, start_gather_action,
-    weapon_extra_rotation,
+    aim_dir, dodge_burst_dt, dodge_dir, dodge_iframe, dummy_club_pitch, dummy_windup_ticks,
+    integrate, loadout, merge_input_buttons, predicted_busy_ticks, predicted_release_ticks,
+    start_drawn_action, start_gather_action, weapon_extra_rotation, ACTION_BLOCK, ACTION_DODGE,
+    ACTION_HEAVY, ACTION_HIT, ACTION_LIGHT, ACTION_NONE, BTN_BLOCK, BTN_DODGE, BTN_HEAVY,
+    BTN_LIGHT, BTN_SPRINT, DODGE_SPEED, GATHER_RANGE, MAX_HP, MAX_STAMINA, PLAYER_HEIGHT,
+    SHOT_CEILING_Y, SHOT_GROUND_Y, SHOT_SPAWN_Y, SPRINT_STAMINA_PER_SEC, STAMINA_REGEN_PER_SEC,
+    TICK_HZ,
 };
 
 use crate::camera::ControlState;
 use crate::module_bindings::{
-    Character, CharacterTableAccess, CombatEvent, Dummy, DummyTableAccess, GatherNode,
-    GatherNodeTableAccess, Player, PlayerTableAccess, Projectile, ProjectileTableAccess,
     character_table::characterQueryTableAccess, combat_event_table::combat_eventQueryTableAccess,
     dummy_table::dummyQueryTableAccess, gather_node_table::gather_nodeQueryTableAccess,
-    player_table::playerQueryTableAccess, projectile_table::projectileQueryTableAccess,
+    player_table::playerQueryTableAccess, projectile_table::projectileQueryTableAccess, Character,
+    CharacterTableAccess, CombatEvent, Dummy, DummyTableAccess, GatherNode, GatherNodeTableAccess,
+    Player, PlayerTableAccess, Projectile, ProjectileTableAccess,
 };
 use crate::net::{LocalPlayer, RemotePlayer, ServerPose};
 use crate::{MainCamera, StdbConn, StdbSubs, SubKey};
@@ -662,6 +662,7 @@ pub fn sync_vitals(
             3 => "blocked".into(),
             4 => "dodged".into(),
             5 => format!("gathered  +{:.0} xp", msg.row.damage),
+            6 => "guard break".into(),
             _ => vitals.log.clone(),
         };
     }
@@ -681,7 +682,7 @@ pub fn flash_hits(
     for msg in events.read() {
         let row = &msg.row;
         let involved = me == Some(row.target) || me == Some(row.attacker);
-        if (row.kind == 1 || row.kind == 2) && involved {
+        if (row.kind == 1 || row.kind == 2 || row.kind == 6) && involved {
             if me == Some(row.target) && !row.target_is_dummy {
                 if let Ok(mut t) = local.single_mut() {
                     t.translation.x = row.x;
@@ -689,7 +690,7 @@ pub fn flash_hits(
                     t.translation.y = PLAYER_HEIGHT * 0.5 + 0.06;
                 }
                 flash.t = 0.16;
-                control.shake = control.shake.max(0.16);
+                control.shake = control.shake.max(if row.kind == 6 { 0.24 } else { 0.16 });
             } else if me == Some(row.attacker) && !row.attacker_is_dummy {
                 control.shake = control.shake.max(0.08);
             }
@@ -704,6 +705,7 @@ pub fn flash_hits(
                     format!("+{:.0}xp", row.damage),
                     Color::srgb(0.55, 0.85, 0.45),
                 ),
+                6 => ("BREAK".into(), Color::srgb(0.95, 0.55, 0.22)),
                 _ => continue,
             };
             spawn_world_floater(

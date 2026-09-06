@@ -532,6 +532,58 @@ mod tests {
     }
 
     #[test]
+    fn empty_stamina_drops_the_shield() {
+        assert!(
+            start_drawn_action(ACTION_NONE, LOADOUT_SWORD, LOADOUT_SWORD, 0.0, BTN_BLOCK).is_none()
+        );
+        assert!(
+            start_drawn_action(ACTION_NONE, LOADOUT_SWORD, LOADOUT_SWORD, 0.4, BTN_BLOCK).is_none()
+        );
+        assert!(
+            start_drawn_action(ACTION_NONE, LOADOUT_SWORD, LOADOUT_SWORD, 1.0, BTN_BLOCK).is_some()
+        );
+    }
+
+    #[test]
+    fn shield_covers_the_front_not_the_back() {
+        // yaw 0 faces -Z.
+        assert!(block_covers(0.0, 0.0, 0.0, 0.0, -4.0));
+        assert!(!block_covers(0.0, 0.0, 0.0, 0.0, 4.0));
+        assert!(!block_covers(0.0, 0.0, 0.0, 4.0, 0.0));
+    }
+
+    #[test]
+    fn frontal_block_chips_and_holds() {
+        let hit = resolve_guard(ACTION_BLOCK, 0.0, 0.0, 0.0, 0.0, -3.0, 40.0);
+        assert_eq!(hit.result, GuardResult::Covered);
+        assert!((hit.damage_mul - BLOCK_CHIP).abs() < 1e-4);
+        assert!((hit.stamina_after - (40.0 - BLOCK_STAMINA_HIT)).abs() < 1e-3);
+        assert!(!hit.hitstun);
+        assert!(hit.knockback_mul < 0.5);
+    }
+
+    #[test]
+    fn empty_guard_breaks() {
+        let hit = resolve_guard(ACTION_BLOCK, 0.0, 0.0, 0.0, 0.0, -3.0, 8.0);
+        assert_eq!(hit.result, GuardResult::GuardBreak);
+        assert_eq!(hit.stamina_after, 0.0);
+        assert!(hit.hitstun);
+        assert!(hit.knockback_mul > 1.0);
+        assert!(guard_break_ticks() > hitstun_ticks());
+    }
+
+    #[test]
+    fn block_from_behind_is_open() {
+        let hit = resolve_guard(ACTION_BLOCK, 0.0, 0.0, 0.0, 0.0, 4.0, 80.0);
+        assert_eq!(hit.result, GuardResult::OpenFlank);
+        assert_eq!(hit.damage_mul, 1.0);
+        assert!(hit.hitstun);
+        assert!((hit.stamina_after - 80.0).abs() < 1e-3);
+        let idle = resolve_guard(ACTION_NONE, 0.0, 0.0, 0.0, 0.0, -3.0, 80.0);
+        assert_eq!(idle.result, GuardResult::Open);
+    }
+
+    #[test]
     fn wanderer_tag_mixes_more_than_tail_bytes() {
         let mut a = [0u8; 32];
         a[30] = 0x00;
