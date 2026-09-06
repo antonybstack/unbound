@@ -567,6 +567,19 @@ mod tests {
     }
 
     #[test]
+    fn committed_swing_does_not_track() {
+        assert!(swing_locks_facing(ACTION_LIGHT, true));
+        assert!(swing_locks_facing(ACTION_HEAVY, true));
+        assert!(!swing_locks_facing(ACTION_LIGHT, false));
+        assert!(!swing_locks_facing(ACTION_HEAVY, false));
+        assert!(!swing_locks_facing(ACTION_NONE, false));
+        assert!(!swing_locks_facing(ACTION_HIT, false));
+        // yaw 0 faces -Z. A sidestep onto +X leaves the strike cone.
+        assert!(facing_dot(0.0, 0.0, -2.0) > 0.9);
+        assert!(facing_dot(0.0, 2.0, 0.0) < 0.2);
+    }
+
+    #[test]
     fn block_only_on_sword() {
         assert!(
             start_drawn_action(ACTION_NONE, LOADOUT_BOW, LOADOUT_BOW, 100.0, BTN_BLOCK).is_none()

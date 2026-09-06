@@ -18,7 +18,7 @@ use crate::combat::{
     flash_hits, fly_predicted_shots, fly_shots, interpolate_dummy, pose_dummy_club, pose_hp_bars,
     pose_shields, pose_weapons, refresh_remote_weapons, refresh_weapon, spawn_predicted_shots,
     subscribe_world, sync_dummy, sync_nameplates, sync_nodes, sync_projectiles, sync_vitals,
-    tick_dummy_pose, tick_dust, tick_hit_flash, tick_prediction, update_floaters,
+    tick_dummy_pose, tick_dust, tick_hit_flash, tick_hit_sparks, tick_prediction, update_floaters,
     update_nameplates,
 };
 use crate::module_bindings::{
@@ -129,6 +129,7 @@ fn main() {
                 read_combat_input,
                 apply_predicted_starts,
                 tick_dust,
+                tick_hit_sparks,
                 tick_prediction,
                 spawn_predicted_shots,
                 fly_predicted_shots,

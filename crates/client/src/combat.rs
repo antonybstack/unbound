@@ -73,6 +73,11 @@ pub struct DustPuff {
 }
 
 #[derive(Component)]
+pub struct HitSpark {
+    pub age: f32,
+}
+
+#[derive(Component)]
 pub struct DummyPose {
     pub x: f32,
     pub z: f32,
@@ -678,6 +683,8 @@ pub fn flash_hits(
     mut flash: ResMut<HitFlash>,
     mut control: ResMut<ControlState>,
     mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
     camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
 ) {
     let me = conn.and_then(|c| c.try_identity());
@@ -698,19 +705,28 @@ pub fn flash_hits(
                 control.shake = control.shake.max(0.08);
             }
         }
+        let (text, color) = match row.kind {
+            1 => (format!("{:.0}", row.damage), Color::srgb(0.95, 0.82, 0.45)),
+            2 => ("KILL".into(), Color::srgb(0.95, 0.35, 0.22)),
+            3 => ("BLOCK".into(), Color::srgb(0.55, 0.75, 0.95)),
+            4 => ("DODGE".into(), Color::srgb(0.75, 0.9, 0.55)),
+            5 => (
+                format!("+{:.0}xp", row.damage),
+                Color::srgb(0.55, 0.85, 0.45),
+            ),
+            6 => ("BREAK".into(), Color::srgb(0.95, 0.55, 0.22)),
+            _ => continue,
+        };
+        if row.kind != 5 {
+            spawn_hit_spark(
+                &mut commands,
+                &mut meshes,
+                &mut materials,
+                Vec3::new(row.x, 1.15, row.z),
+                color,
+            );
+        }
         if let Some((cam, cam_tf)) = cam {
-            let (text, color) = match row.kind {
-                1 => (format!("{:.0}", row.damage), Color::srgb(0.95, 0.82, 0.45)),
-                2 => ("KILL".into(), Color::srgb(0.95, 0.35, 0.22)),
-                3 => ("BLOCK".into(), Color::srgb(0.55, 0.75, 0.95)),
-                4 => ("DODGE".into(), Color::srgb(0.75, 0.9, 0.55)),
-                5 => (
-                    format!("+{:.0}xp", row.damage),
-                    Color::srgb(0.55, 0.85, 0.45),
-                ),
-                6 => ("BREAK".into(), Color::srgb(0.95, 0.55, 0.22)),
-                _ => continue,
-            };
             spawn_world_floater(
                 &mut commands,
                 cam,
@@ -873,6 +889,51 @@ pub fn apply_predicted_starts(
             );
             transform.translation.x = x;
             transform.translation.z = z;
+        }
+    }
+}
+
+fn spawn_hit_spark(
+    commands: &mut Commands,
+    meshes: &mut Assets<Mesh>,
+    materials: &mut Assets<StandardMaterial>,
+    at: Vec3,
+    color: Color,
+) {
+    commands.spawn((
+        Mesh3d(meshes.add(Sphere::new(0.16))),
+        MeshMaterial3d(materials.add(StandardMaterial {
+            base_color: color.with_alpha(0.9),
+            alpha_mode: AlphaMode::Blend,
+            unlit: true,
+            emissive: LinearRgba::from(color) * 3.0,
+            ..default()
+        })),
+        Transform::from_translation(at),
+        HitSpark { age: 0.0 },
+    ));
+}
+
+pub fn tick_hit_sparks(
+    time: Res<Time>,
+    mut commands: Commands,
+    mut sparks: Query<(
+        Entity,
+        &mut HitSpark,
+        &mut Transform,
+        &MeshMaterial3d<StandardMaterial>,
+    )>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
+    for (e, mut spark, mut tf, mat) in &mut sparks {
+        spark.age += time.delta_secs();
+        let t = (spark.age / 0.18).clamp(0.0, 1.0);
+        tf.scale = Vec3::splat(1.0 + t * 2.4);
+        if let Some(mut m) = materials.get_mut(&mat.0) {
+            m.base_color.set_alpha(0.9 * (1.0 - t));
+        }
+        if spark.age > 0.18 {
+            commands.entity(e).despawn();
         }
     }
 }

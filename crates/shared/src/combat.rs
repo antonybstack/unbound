@@ -357,6 +357,11 @@ pub fn dummy_recover_ticks() -> u8 {
     8
 }
 
+/// A committed swing keeps the facing it started with so you can step out of the cone.
+pub fn swing_locks_facing(action: u8, pending_hit: bool) -> bool {
+    pending_hit && (action == ACTION_LIGHT || action == ACTION_HEAVY)
+}
+
 pub fn merge_input_buttons(held: u32, latched: u32) -> u32 {
     held | latched
 }
