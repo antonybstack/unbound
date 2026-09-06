@@ -90,7 +90,13 @@ pub fn play_local_sfx(
         control.sfx_swing = 0;
     }
     if control.sfx_draw != 0 {
-        play_draw_sfx(&mut commands, &sfx, control.loadout, control.sfx_draw > 0);
+        play_draw_sfx(
+            &mut commands,
+            &sfx,
+            control.loadout,
+            control.sfx_draw > 0,
+            1.0,
+        );
         control.sfx_draw = 0;
     }
     if control.sfx_foot != 0 {
@@ -229,6 +235,45 @@ pub fn play_remote_swing_sfx(
     }
 }
 
+/// Other wanderer's F/1/2/3. Local already scrapes by loadout; a 1v1 was silent until connect.
+pub fn play_remote_draw_sfx(
+    mut commands: Commands,
+    sfx: Option<Res<Sfx>>,
+    local: Query<&Transform, With<LocalPlayer>>,
+    mut rems: Query<(&ServerPose, &Transform, &mut RemoteStep), With<RemotePlayer>>,
+) {
+    let Some(sfx) = sfx else {
+        return;
+    };
+    let Ok(local_tf) = local.single() else {
+        return;
+    };
+    let lx = local_tf.translation.x;
+    let lz = local_tf.translation.z;
+    for (pose, tf, mut step) in &mut rems {
+        if pose.drawn != step.last_drawn {
+            let rdx = tf.translation.x - lx;
+            let rdz = tf.translation.z - lz;
+            let range = (rdx * rdx + rdz * rdz).sqrt();
+            if range < FOOT_MUTE {
+                let atten = if range <= FOOT_NEAR {
+                    1.0
+                } else {
+                    1.0 - (range - FOOT_NEAR) / (FOOT_MUTE - FOOT_NEAR)
+                };
+                play_draw_sfx(
+                    &mut commands,
+                    &sfx,
+                    pose.loadout,
+                    pose.drawn,
+                    0.8 * atten,
+                );
+            }
+        }
+        step.last_drawn = pose.drawn;
+    }
+}
+
 const REMOTE_WALK_SPEED: f32 = 1.5;
 const REMOTE_SPRINT_SPEED: f32 = 6.5;
 const FOOT_NEAR: f32 = 12.0;
@@ -334,7 +379,10 @@ fn play_swing_whoosh(commands: &mut Commands, sfx: &Sfx, heavy: bool, scale: f32
     commands.spawn((AudioPlayer::new(handle), settings));
 }
 
-fn play_draw_sfx(commands: &mut Commands, sfx: &Sfx, loadout: u8, draw: bool) {
+fn play_draw_sfx(commands: &mut Commands, sfx: &Sfx, loadout: u8, draw: bool, scale: f32) {
+    if scale <= 0.001 {
+        return;
+    }
     // Sword: steel-on-leather. Bow: quieter higher string. Staff: lower/thicker.
     let (handle, volume, speed) = match loadout {
         LOADOUT_BOW => (sfx.dodge.clone(), 0.24, 1.55),
@@ -342,7 +390,7 @@ fn play_draw_sfx(commands: &mut Commands, sfx: &Sfx, loadout: u8, draw: bool) {
         _ => (sfx.block.clone(), 0.4, 1.15),
     };
     let mut settings = PlaybackSettings::DESPAWN;
-    settings.volume = bevy::audio::Volume::Linear(volume);
+    settings.volume = bevy::audio::Volume::Linear(volume * scale);
     // Sheathe is the same sample pitched down. Sword stays 1.15 / 0.75.
     settings.speed = if draw { speed } else { speed * 0.75 / 1.15 };
     commands.spawn((AudioPlayer::new(handle), settings));

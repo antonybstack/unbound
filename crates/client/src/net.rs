@@ -26,10 +26,11 @@ pub struct RemoteStep {
     pub since: f32,
     pub last_action: u8,
     pub last_pending: bool,
+    pub last_drawn: bool,
 }
 
 impl RemoteStep {
-    pub fn new(x: f32, z: f32, action: u8, pending: bool) -> Self {
+    pub fn new(x: f32, z: f32, action: u8, pending: bool, drawn: bool) -> Self {
         Self {
             accum: 0.18,
             last_x: x,
@@ -38,6 +39,7 @@ impl RemoteStep {
             since: 0.0,
             last_action: action,
             last_pending: pending,
+            last_drawn: drawn,
         }
     }
 }
@@ -392,7 +394,13 @@ fn spawn_pawn(
         commands.entity(parent).insert((
             RemotePlayer,
             crate::camera::CamBlock::default(),
-            RemoteStep::new(player.x, player.z, player.action, player.pending_hit),
+            RemoteStep::new(
+                player.x,
+                player.z,
+                player.action,
+                player.pending_hit,
+                player.drawn,
+            ),
         ));
         let bar = commands
             .spawn((
