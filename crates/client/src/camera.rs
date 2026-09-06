@@ -4,8 +4,8 @@ use bevy::window::{CursorGrabMode, CursorOptions};
 
 use crate::{LocalPlayer, MainCamera};
 use unbound_shared::{
-    ACTION_NONE, CAM_BLOCK_RADIUS, CAM_SHEATHED, CAM_SHOULDER, MAX_STAMINA, PLAYER_HEIGHT,
-    camera_distance, camera_push_out, camera_shake_amp, lock_focus_xz,
+    camera_distance, camera_push_out, camera_shake_amp, lock_focus_xz, ACTION_NONE,
+    CAM_BLOCK_RADIUS, CAM_SHEATHED, CAM_SHOULDER, MAX_STAMINA, PLAYER_HEIGHT,
 };
 
 #[derive(Component, Clone, Copy)]

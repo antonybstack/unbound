@@ -1,7 +1,7 @@
 use crate::{
-    ACTION_BLOCK, ACTION_DEAD, ACTION_DODGE, ACTION_GATHER, ACTION_HEAVY, ACTION_HIT, ACTION_LIGHT,
-    ACTION_SPAWN, ACTION_SWAP, BTN_BLOCK, BTN_DODGE, BTN_HEAVY, BTN_INTERACT, BTN_LIGHT,
-    LOADOUT_BOW, LOADOUT_STAFF, LOADOUT_SWORD, TICK_DT, TICK_HZ, facing_dot,
+    facing_dot, ACTION_BLOCK, ACTION_DEAD, ACTION_DODGE, ACTION_GATHER, ACTION_HEAVY, ACTION_HIT,
+    ACTION_LIGHT, ACTION_SPAWN, ACTION_SWAP, BTN_BLOCK, BTN_DODGE, BTN_HEAVY, BTN_INTERACT,
+    BTN_LIGHT, LOADOUT_BOW, LOADOUT_STAFF, LOADOUT_SWORD, TICK_DT, TICK_HZ,
 };
 
 #[derive(Clone, Copy, Debug)]
@@ -335,7 +335,11 @@ pub fn dummy_strafe_dir(pocket: f32, cooldown: u8) -> f32 {
     if pocket.abs() > 0.01 || cooldown == 0 {
         return 0.0;
     }
-    if (cooldown / 10) % 2 == 0 { 1.0 } else { -1.0 }
+    if (cooldown / 10) % 2 == 0 {
+        1.0
+    } else {
+        -1.0
+    }
 }
 
 pub fn camera_distance(drawn: bool, lock_on: bool, sprinting: bool) -> f32 {

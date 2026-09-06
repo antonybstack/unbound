@@ -1,8 +1,8 @@
 use bevy::prelude::*;
 use bevy_stdb::prelude::*;
 
-use crate::StdbConn;
 use crate::module_bindings::CombatEvent;
+use crate::StdbConn;
 
 #[derive(Resource)]
 pub struct Sfx {
