@@ -615,6 +615,20 @@ mod tests {
     }
 
     #[test]
+    fn lock_reticle_pops_when_tab_grabs() {
+        let rest = lock_reticle_scale(0.0);
+        let pop = lock_reticle_scale(LOCK_PULSE_TIME);
+        assert!((rest - 1.0).abs() < 1e-4);
+        assert!(pop > rest);
+        assert!((pop - (1.0 + LOCK_PULSE_EXTRA)).abs() < 1e-4);
+        assert!(pop >= 1.4 && pop <= 2.0);
+        let mid = lock_reticle_scale(LOCK_PULSE_TIME * 0.5);
+        assert!(mid > rest && mid < pop);
+        assert!((lock_reticle_scale(-0.5) - 1.0).abs() < 1e-4);
+        assert!((lock_reticle_scale(LOCK_PULSE_TIME * 2.0) - pop).abs() < 1e-4);
+    }
+
+    #[test]
     fn camera_push_out_leaves_the_shell() {
         let (x, y, z) = camera_push_out(0.1, 0.8, 0.0, 0.0, 0.8, 0.0, 1.0);
         let d = (x * x + (y - 0.8) * (y - 0.8) + z * z).sqrt();

@@ -4,8 +4,9 @@ use bevy::window::{CursorGrabMode, CursorOptions};
 
 use crate::{LocalPlayer, MainCamera};
 use unbound_shared::{
-    camera_distance, camera_push_out, camera_shake_amp, lock_focus_xz, ACTION_DEAD, ACTION_DODGE,
-    ACTION_NONE, CAM_BLOCK_RADIUS, CAM_SHEATHED, CAM_SHOULDER, MAX_STAMINA, PLAYER_HEIGHT,
+    camera_distance, camera_push_out, camera_shake_amp, lock_focus_xz, lock_reticle_scale,
+    ACTION_DEAD, ACTION_DODGE, ACTION_NONE, CAM_BLOCK_RADIUS, CAM_SHEATHED, CAM_SHOULDER,
+    MAX_STAMINA, PLAYER_HEIGHT,
 };
 
 #[derive(Component, Clone, Copy)]
@@ -62,6 +63,7 @@ pub struct ControlState {
     pub sfx_death: bool,
     pub sfx_rise: bool,
     pub sfx_level: bool,
+    pub lock_pulse: f32,
 }
 
 impl Default for ControlState {
@@ -101,6 +103,7 @@ impl Default for ControlState {
             sfx_death: false,
             sfx_rise: false,
             sfx_level: false,
+            lock_pulse: 0.0,
         }
     }
 }
@@ -176,6 +179,7 @@ pub fn update_camera(
     let blend = (8.0 * dt).min(1.0);
     control.cam_dist += (want - control.cam_dist) * blend;
     control.shake = (control.shake - dt).max(0.0);
+    control.lock_pulse = (control.lock_pulse - dt).max(0.0);
 
     let mut focus = player;
     if control.lock_on {
@@ -225,7 +229,7 @@ pub fn update_camera(
             ring.translation = Vec3::new(target.x, target.y + 1.15, target.z);
             ring.rotation =
                 Quat::from_rotation_x(std::f32::consts::FRAC_PI_2) * Quat::from_rotation_z(spin);
-            ring.scale = Vec3::ONE;
+            ring.scale = Vec3::splat(lock_reticle_scale(control.lock_pulse));
         } else {
             ring.scale = Vec3::ZERO;
         }

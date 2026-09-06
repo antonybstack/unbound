@@ -654,6 +654,11 @@ fn read_combat_input(
     }
     if control.lock_on != was_lock {
         control.sfx_lock = if control.lock_on { 1 } else { -1 };
+        control.lock_pulse = if control.lock_on {
+            unbound_shared::LOCK_PULSE_TIME
+        } else {
+            0.0
+        };
     }
 
     let mut buttons = 0u32;

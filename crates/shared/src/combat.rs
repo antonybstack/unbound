@@ -279,6 +279,8 @@ pub const CAM_SHOULDER: f32 = 0.42;
 pub const CAM_SHAKE_TIME: f32 = 0.16;
 pub const CAM_BLOCK_RADIUS: f32 = 0.95;
 pub const LOCK_RANGE: f32 = 16.0;
+pub const LOCK_PULSE_TIME: f32 = 0.22;
+pub const LOCK_PULSE_EXTRA: f32 = 0.7;
 
 pub fn dummy_light_windup() -> u8 {
     12
@@ -403,6 +405,12 @@ pub fn lock_aim_pitch(from_y: f32, to_y: f32, dist_xz: f32) -> f32 {
 pub fn camera_shake_amp(t: f32) -> f32 {
     let a = (t / CAM_SHAKE_TIME).clamp(0.0, 1.0);
     a * a * 0.16
+}
+
+/// Ring scale after Tab grabs a lock. Oversized at t=LOCK_PULSE_TIME, 1 at rest.
+pub fn lock_reticle_scale(t: f32) -> f32 {
+    let a = (t / LOCK_PULSE_TIME).clamp(0.0, 1.0);
+    1.0 + a * a * LOCK_PULSE_EXTRA
 }
 
 pub fn hp_regen_ok(action: u8) -> bool {
