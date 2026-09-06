@@ -431,6 +431,21 @@ pub fn dummy_heavy_slammed(
     prev_pending && !new_pending && prev_action == ACTION_HEAVY && new_action == ACTION_HIT
 }
 
+/// Roll just committed. True only on the action rising edge into dodge so
+/// i-frame ticks do not re-puff.
+pub fn dodge_started(prev_action: u8, new_action: u8) -> bool {
+    prev_action != ACTION_DODGE && new_action == ACTION_DODGE
+}
+
+/// Same mute as remote footsteps. A far roll is a ghost, not a lawn puff.
+pub const REMOTE_DODGE_DUST_RANGE: f32 = 22.0;
+
+/// Other wanderer's feet. Local already puffs in apply_predicted_starts;
+/// staying in dodge and a far roll do not re-fire.
+pub fn remote_dodge_dust(prev_action: u8, new_action: u8, range: f32) -> bool {
+    dodge_started(prev_action, new_action) && range <= REMOTE_DODGE_DUST_RANGE
+}
+
 /// Body just dropped. True only on the alive true→false edge so respawn and
 /// staying dead do not re-fire.
 pub fn death_started(prev_alive: bool, new_alive: bool) -> bool {

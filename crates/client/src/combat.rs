@@ -6,8 +6,8 @@ use unbound_shared::{
     hp_bar_tint, hyperarmor, hyperarmor_flash_emissive, hyperarmor_flash_scale, incoming_hit_shake,
     integrate, invulnerable_for, life_started, loadout, melee_lunge_dt, merge_input_buttons,
     nameplate_alpha, node_mesh_scale, node_respawned, node_restore_mix, predicted_busy_ticks,
-    predicted_release_ticks, start_drawn_action, start_gather_action, wanderer_hp_bar_hit,
-    wanderer_hp_bar_tint, weapon_extra_rotation,
+    predicted_release_ticks, remote_dodge_dust, start_drawn_action, start_gather_action,
+    wanderer_hp_bar_hit, wanderer_hp_bar_tint, weapon_extra_rotation,
     ACTION_BLOCK, ACTION_DEAD, ACTION_DODGE, ACTION_HEAVY, ACTION_HIT, ACTION_LIGHT, ACTION_NONE,
     BTN_BLOCK, BTN_DODGE, BTN_HEAVY, BTN_LIGHT, BTN_SPRINT, DODGE_SPEED, GATHER_RANGE,
     HP_FLASH_TIME, HYPERARMOR_FLASH_TIME, MAX_HP, MAX_STAMINA, MOVE_SPEED, PLAYER_HEIGHT,
@@ -23,7 +23,7 @@ use crate::module_bindings::{
     CharacterTableAccess, CombatEvent, Dummy, DummyTableAccess, GatherNode, GatherNodeTableAccess,
     Player, PlayerTableAccess, Projectile, ProjectileTableAccess,
 };
-use crate::net::{LocalPlayer, NetworkedIdentity, RemotePlayer, ServerPose};
+use crate::net::{LocalPlayer, NetworkedIdentity, RemotePlayer, RemoteStep, ServerPose};
 use crate::{MainCamera, StdbConn, StdbSubs, SubKey};
 use spacetimedb_sdk::Table;
 
@@ -1068,6 +1068,32 @@ pub fn tick_remote_ghost(
             m.alpha_mode = AlphaMode::Opaque;
         }
         m.base_color = color;
+    }
+}
+
+pub fn puff_remote_dodge(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    local: Query<&Transform, With<LocalPlayer>>,
+    mut remotes: Query<(&ServerPose, &Transform, &mut RemoteStep), With<RemotePlayer>>,
+) {
+    let local_xz = local
+        .single()
+        .ok()
+        .map(|t| (t.translation.x, t.translation.z));
+    for (pose, tf, mut step) in &mut remotes {
+        let range = local_xz
+            .map(|(lx, lz)| {
+                let dx = tf.translation.x - lx;
+                let dz = tf.translation.z - lz;
+                (dx * dx + dz * dz).sqrt()
+            })
+            .unwrap_or(0.0);
+        if remote_dodge_dust(step.last_puff_action, pose.action, range) {
+            spawn_dust(&mut commands, &mut meshes, &mut materials, tf.translation);
+        }
+        step.last_puff_action = pose.action;
     }
 }
 

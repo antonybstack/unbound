@@ -27,6 +27,7 @@ pub struct RemoteStep {
     pub last_action: u8,
     pub last_pending: bool,
     pub last_drawn: bool,
+    pub last_puff_action: u8,
 }
 
 impl RemoteStep {
@@ -40,6 +41,7 @@ impl RemoteStep {
             last_action: action,
             last_pending: pending,
             last_drawn: drawn,
+            last_puff_action: action,
         }
     }
 }

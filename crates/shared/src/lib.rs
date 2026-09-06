@@ -576,6 +576,30 @@ mod tests {
     }
 
     #[test]
+    fn remote_dodge_dust_fires_once_on_roll_start() {
+        assert!(dodge_started(ACTION_NONE, ACTION_DODGE));
+        assert!(dodge_started(ACTION_LIGHT, ACTION_DODGE));
+        assert!(dodge_started(ACTION_HIT, ACTION_DODGE));
+        assert!(!dodge_started(ACTION_DODGE, ACTION_DODGE));
+        assert!(!dodge_started(ACTION_DODGE, ACTION_NONE));
+        assert!(!dodge_started(ACTION_NONE, ACTION_LIGHT));
+        assert!(!dodge_started(ACTION_BLOCK, ACTION_BLOCK));
+        assert!(remote_dodge_dust(ACTION_NONE, ACTION_DODGE, 0.0));
+        assert!(remote_dodge_dust(
+            ACTION_NONE,
+            ACTION_DODGE,
+            REMOTE_DODGE_DUST_RANGE
+        ));
+        assert!(!remote_dodge_dust(
+            ACTION_NONE,
+            ACTION_DODGE,
+            REMOTE_DODGE_DUST_RANGE + 0.01
+        ));
+        assert!(!remote_dodge_dust(ACTION_DODGE, ACTION_DODGE, 1.0));
+        assert!((REMOTE_DODGE_DUST_RANGE - 22.0).abs() < 1e-5);
+    }
+
+    #[test]
     fn death_thud_fires_once_when_alive_falls() {
         assert!(death_started(true, false));
         assert!(!death_started(false, false));
