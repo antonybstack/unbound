@@ -1056,8 +1056,17 @@ pub fn tick_prediction(time: Res<Time>, mut control: ResMut<ControlState>) {
         && !unbound_shared::move_lock(control.pred_action);
     if sprinting {
         control.pred_stamina = (control.pred_stamina - SPRINT_STAMINA_PER_SEC * dt).max(0.0);
-    } else if unbound_shared::stamina_regen_ok(control.pred_action) {
-        control.pred_stamina = (control.pred_stamina + STAMINA_REGEN_PER_SEC * dt).min(MAX_STAMINA);
+        control.foot_accum += dt;
+        if control.foot_accum >= 0.28 {
+            control.foot_accum = 0.0;
+            control.sfx_foot = true;
+        }
+    } else {
+        control.foot_accum = 0.18;
+        if unbound_shared::stamina_regen_ok(control.pred_action) {
+            control.pred_stamina =
+                (control.pred_stamina + STAMINA_REGEN_PER_SEC * dt).min(MAX_STAMINA);
+        }
     }
 }
 

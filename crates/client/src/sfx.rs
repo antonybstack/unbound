@@ -92,4 +92,11 @@ pub fn play_local_sfx(
         commands.spawn((AudioPlayer::new(sfx.block.clone()), settings));
         control.sfx_draw = 0;
     }
+    if control.sfx_foot {
+        let mut settings = PlaybackSettings::DESPAWN;
+        settings.volume = bevy::audio::Volume::Linear(0.18);
+        settings.speed = 1.85;
+        commands.spawn((AudioPlayer::new(sfx.gather.clone()), settings));
+        control.sfx_foot = false;
+    }
 }

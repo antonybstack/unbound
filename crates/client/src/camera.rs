@@ -37,6 +37,8 @@ pub struct ControlState {
     pub sfx_dodge: bool,
     pub sfx_swing: u8,
     pub sfx_draw: i8,
+    pub sfx_foot: bool,
+    pub foot_accum: f32,
 }
 
 impl Default for ControlState {
@@ -64,6 +66,8 @@ impl Default for ControlState {
             sfx_dodge: false,
             sfx_swing: 0,
             sfx_draw: 0,
+            sfx_foot: false,
+            foot_accum: 0.2,
         }
     }
 }
