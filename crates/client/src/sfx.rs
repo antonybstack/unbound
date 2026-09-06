@@ -84,4 +84,12 @@ pub fn play_local_sfx(
         commands.spawn((AudioPlayer::new(handle), settings));
         control.sfx_swing = 0;
     }
+    if control.sfx_draw != 0 {
+        let draw = control.sfx_draw > 0;
+        let mut settings = PlaybackSettings::DESPAWN;
+        settings.volume = bevy::audio::Volume::Linear(0.4);
+        settings.speed = if draw { 1.15 } else { 0.75 };
+        commands.spawn((AudioPlayer::new(sfx.block.clone()), settings));
+        control.sfx_draw = 0;
+    }
 }

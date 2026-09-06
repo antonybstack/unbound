@@ -498,17 +498,27 @@ fn read_combat_input(
 ) {
     if keys.just_pressed(KeyCode::KeyF) {
         control.drawn = !control.drawn;
+        control.sfx_draw = if control.drawn { 1 } else { -1 };
     }
     if keys.just_pressed(KeyCode::Digit1) {
         control.loadout = 0;
+        if !control.drawn {
+            control.sfx_draw = 1;
+        }
         control.drawn = true;
     }
     if keys.just_pressed(KeyCode::Digit2) {
         control.loadout = 1;
+        if !control.drawn {
+            control.sfx_draw = 1;
+        }
         control.drawn = true;
     }
     if keys.just_pressed(KeyCode::Digit3) {
         control.loadout = 2;
+        if !control.drawn {
+            control.sfx_draw = 1;
+        }
         control.drawn = true;
     }
     if keys.just_pressed(KeyCode::Tab) {
