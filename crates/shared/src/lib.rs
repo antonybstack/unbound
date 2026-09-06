@@ -213,6 +213,17 @@ pub fn skill_level(xp: u64) -> u8 {
     lvl.clamp(1, 50) as u8
 }
 
+pub fn skill_label(skill: u8) -> &'static str {
+    match skill {
+        SKILL_RANGED => "Ranged",
+        SKILL_MAGIC => "Magic",
+        SKILL_DEFENCE => "Defence",
+        SKILL_HITPOINTS => "Hitpoints",
+        SKILL_GATHERING => "Gathering",
+        _ => "Melee",
+    }
+}
+
 pub fn skill_for_loadout(loadout: u8) -> u8 {
     match loadout {
         LOADOUT_BOW => SKILL_RANGED,
@@ -257,6 +268,8 @@ mod tests {
 
     #[test]
     fn skill_curve_is_osrs_ish() {
+        assert_eq!(skill_label(SKILL_MELEE), "Melee");
+        assert_eq!(skill_label(SKILL_GATHERING), "Gathering");
         assert_eq!(skill_level(0), 1);
         assert_eq!(skill_level(80), 2);
         assert_eq!(skill_level(720), 4);

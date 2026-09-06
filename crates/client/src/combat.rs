@@ -115,6 +115,7 @@ pub struct LocalVitals {
     pub node_dist: f32,
     pub others: String,
     pub log: String,
+    pub skills_primed: bool,
 }
 
 impl Default for LocalVitals {
@@ -138,6 +139,7 @@ impl Default for LocalVitals {
             node_dist: 999.0,
             others: String::new(),
             log: String::new(),
+            skills_primed: false,
         }
     }
 }
@@ -430,12 +432,15 @@ pub fn sync_nodes(
     mut updates: ReadUpdateMessage<GatherNode>,
     mut deletes: ReadDeleteMessage<GatherNode>,
     conn: Option<Res<StdbConn>>,
+    time: Res<Time>,
+    control: Res<ControlState>,
+    local: Query<&Transform, With<LocalPlayer>>,
     mut nodes: Query<(
         Entity,
         &NodePawn,
         &mut Transform,
         &mut MeshMaterial3d<StandardMaterial>,
-    )>,
+    ), Without<LocalPlayer>>,
 ) {
     if let Some(conn) = conn.as_ref() {
         for row in conn.db().gather_node().iter() {
@@ -474,6 +479,24 @@ pub fn sync_nodes(
             }
         }
     }
+    let gathering = control.pred_action == unbound_shared::ACTION_GATHER;
+    let me = local.single().ok().map(|t| t.translation);
+    let pulse = 1.0 + 0.07 * (time.elapsed_secs() * 10.0).sin();
+    for (_e, _node, mut transform, _) in &mut nodes {
+        if transform.scale.y < 0.7 {
+            continue;
+        }
+        let near = me
+            .map(|p| {
+                (p.x - transform.translation.x).hypot(p.z - transform.translation.z) < GATHER_RANGE
+            })
+            .unwrap_or(false);
+        if gathering && near {
+            transform.scale = Vec3::splat(pulse);
+        } else if transform.scale.x > 1.01 || transform.scale.x < 0.99 {
+            transform.scale = Vec3::ONE;
+        }
+    }
 }
 
 pub fn sync_vitals(
@@ -484,6 +507,8 @@ pub fn sync_vitals(
     mut player_updates: ReadUpdateMessage<Player>,
     mut events: ReadInsertMessage<CombatEvent>,
     local: Query<&Transform, With<LocalPlayer>>,
+    mut commands: Commands,
+    camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
 ) {
     let Some(conn) = conn else {
         return;
@@ -518,29 +543,68 @@ pub fn sync_vitals(
         }
     }
 
-    let apply_char = |vitals: &mut LocalVitals, c: &Character| {
+    let cam = camera.single().ok();
+    let me_pos = local.single().ok().map(|t| t.translation);
+    let bump = |old: u8, xp: u64| -> (u8, Option<u8>) {
+        let new = unbound_shared::skill_level(xp);
+        (new, (new > old).then_some(new))
+    };
+    let mut apply_one = |c: &Character| {
         if c.identity != me {
             return;
         }
+        let primed = vitals.skills_primed;
         vitals.name = c.name.clone();
-        vitals.melee = unbound_shared::skill_level(c.melee_xp);
-        vitals.ranged = unbound_shared::skill_level(c.ranged_xp);
-        vitals.magic = unbound_shared::skill_level(c.magic_xp);
-        vitals.defence = unbound_shared::skill_level(c.defence_xp);
-        vitals.hitpoints = unbound_shared::skill_level(c.hitpoints_xp);
-        vitals.gather = unbound_shared::skill_level(c.gather_xp);
+        let (melee, up_m) = bump(vitals.melee, c.melee_xp);
+        let (ranged, up_r) = bump(vitals.ranged, c.ranged_xp);
+        let (magic, up_g) = bump(vitals.magic, c.magic_xp);
+        let (defence, up_d) = bump(vitals.defence, c.defence_xp);
+        let (hitpoints, up_h) = bump(vitals.hitpoints, c.hitpoints_xp);
+        let (gather, up_a) = bump(vitals.gather, c.gather_xp);
+        vitals.melee = melee;
+        vitals.ranged = ranged;
+        vitals.magic = magic;
+        vitals.defence = defence;
+        vitals.hitpoints = hitpoints;
+        vitals.gather = gather;
+        vitals.skills_primed = true;
+        if !primed {
+            return;
+        }
+        let ups = [
+            (unbound_shared::SKILL_MELEE, up_m),
+            (unbound_shared::SKILL_RANGED, up_r),
+            (unbound_shared::SKILL_MAGIC, up_g),
+            (unbound_shared::SKILL_DEFENCE, up_d),
+            (unbound_shared::SKILL_HITPOINTS, up_h),
+            (unbound_shared::SKILL_GATHERING, up_a),
+        ];
+        for (skill, up) in ups {
+            let Some(lvl) = up else { continue };
+            let text = format!("{} {}", unbound_shared::skill_label(skill), lvl);
+            vitals.log = text.clone();
+            if let (Some((cam, cam_tf)), Some(pos)) = (cam, me_pos) {
+                spawn_world_floater(
+                    &mut commands,
+                    cam,
+                    cam_tf,
+                    pos + Vec3::Y * 1.2,
+                    text,
+                    Color::srgb(0.95, 0.85, 0.35),
+                );
+            }
+        }
     };
     for c in conn.db().character().iter() {
-        apply_char(&mut vitals, &c);
+        apply_one(&c);
     }
     for msg in characters.read() {
-        apply_char(&mut vitals, &msg.row);
+        apply_one(&msg.row);
     }
     for msg in char_updates.read() {
-        apply_char(&mut vitals, &msg.new);
+        apply_one(&msg.new);
     }
 
-    let me_pos = local.single().ok().map(|t| t.translation);
     vitals.node_dist = 999.0;
     for node in conn.db().gather_node().iter() {
         if node.charges == 0 {
@@ -604,33 +668,52 @@ pub fn flash_hits(
             }
         }
         if let Some((cam, cam_tf)) = cam {
-            if let Ok(screen) = cam.world_to_viewport(cam_tf, Vec3::new(row.x, 1.9, row.z)) {
-                let (text, color) = match row.kind {
-                    1 => (format!("{:.0}", row.damage), Color::srgb(0.95, 0.82, 0.45)),
-                    2 => ("KILL".into(), Color::srgb(0.95, 0.35, 0.22)),
-                    3 => ("BLOCK".into(), Color::srgb(0.55, 0.75, 0.95)),
-                    4 => ("DODGE".into(), Color::srgb(0.75, 0.9, 0.55)),
-                    5 => (
-                        format!("+{:.0}xp", row.damage),
-                        Color::srgb(0.55, 0.85, 0.45),
-                    ),
-                    _ => continue,
-                };
-                commands.spawn((
-                    Node {
-                        position_type: PositionType::Absolute,
-                        left: Val::Px(screen.x),
-                        top: Val::Px(screen.y),
-                        ..default()
-                    },
-                    Text::new(text),
-                    TextFont::from_font_size(16.0),
-                    TextColor(color),
-                    DamageFloater { age: 0.0 },
-                ));
-            }
+            let (text, color) = match row.kind {
+                1 => (format!("{:.0}", row.damage), Color::srgb(0.95, 0.82, 0.45)),
+                2 => ("KILL".into(), Color::srgb(0.95, 0.35, 0.22)),
+                3 => ("BLOCK".into(), Color::srgb(0.55, 0.75, 0.95)),
+                4 => ("DODGE".into(), Color::srgb(0.75, 0.9, 0.55)),
+                5 => (
+                    format!("+{:.0}xp", row.damage),
+                    Color::srgb(0.55, 0.85, 0.45),
+                ),
+                _ => continue,
+            };
+            spawn_world_floater(
+                &mut commands,
+                cam,
+                cam_tf,
+                Vec3::new(row.x, 1.9, row.z),
+                text,
+                color,
+            );
         }
     }
+}
+
+fn spawn_world_floater(
+    commands: &mut Commands,
+    cam: &Camera,
+    cam_tf: &GlobalTransform,
+    world: Vec3,
+    text: String,
+    color: Color,
+) {
+    let Ok(screen) = cam.world_to_viewport(cam_tf, world) else {
+        return;
+    };
+    commands.spawn((
+        Node {
+            position_type: PositionType::Absolute,
+            left: Val::Px(screen.x),
+            top: Val::Px(screen.y),
+            ..default()
+        },
+        Text::new(text),
+        TextFont::from_font_size(16.0),
+        TextColor(color),
+        DamageFloater { age: 0.0 },
+    ));
 }
 
 pub fn update_floaters(
