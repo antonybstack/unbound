@@ -33,6 +33,7 @@ pub struct ControlState {
     pub shake: f32,
     pub lock_focus: Option<Vec3>,
     pub pred_shot: bool,
+    pub hitstop: f32,
 }
 
 impl Default for ControlState {
@@ -56,6 +57,7 @@ impl Default for ControlState {
             shake: 0.0,
             lock_focus: None,
             pred_shot: false,
+            hitstop: 0.0,
         }
     }
 }
@@ -86,7 +88,10 @@ pub fn update_camera(
     mut control: ResMut<ControlState>,
     mut camera: Query<&mut Transform, With<MainCamera>>,
     local: Query<&Transform, (With<LocalPlayer>, Without<MainCamera>)>,
-    mut reticle: Query<&mut Transform, (With<LockReticle>, Without<MainCamera>, Without<LocalPlayer>)>,
+    mut reticle: Query<
+        &mut Transform,
+        (With<LockReticle>, Without<MainCamera>, Without<LocalPlayer>),
+    >,
 ) {
     let dt = time.delta_secs();
     let looking = control.drawn || buttons.pressed(MouseButton::Right);
@@ -150,8 +155,8 @@ pub fn update_camera(
         if let Some(target) = control.lock_focus {
             let spin = time.elapsed_secs() * 2.2;
             ring.translation = Vec3::new(target.x, target.y + 1.15, target.z);
-            ring.rotation = Quat::from_rotation_x(std::f32::consts::FRAC_PI_2)
-                * Quat::from_rotation_z(spin);
+            ring.rotation =
+                Quat::from_rotation_x(std::f32::consts::FRAC_PI_2) * Quat::from_rotation_z(spin);
             ring.scale = Vec3::ONE;
         } else {
             ring.scale = Vec3::ZERO;

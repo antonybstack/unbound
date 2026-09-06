@@ -703,6 +703,10 @@ pub fn flash_hits(
                 control.shake = control.shake.max(if row.kind == 6 { 0.24 } else { 0.16 });
             } else if me == Some(row.attacker) && !row.attacker_is_dummy {
                 control.shake = control.shake.max(0.08);
+                control.hitstop =
+                    control
+                        .hitstop
+                        .max(if row.damage >= 20.0 { 0.10 } else { 0.045 });
             }
         }
         let (text, color) = match row.kind {
@@ -982,7 +986,11 @@ pub fn tick_dust(
 }
 
 pub fn tick_prediction(time: Res<Time>, mut control: ResMut<ControlState>) {
-    let dt = time.delta_secs();
+    let mut dt = time.delta_secs();
+    if control.hitstop > 0.0 {
+        control.hitstop = (control.hitstop - dt).max(0.0);
+        dt = 0.0;
+    }
     if control.pred_ticks > 0.0 {
         control.pred_ticks = (control.pred_ticks - dt * TICK_HZ).max(0.0);
         if control.pred_ticks <= 0.0 && control.pred_action != ACTION_BLOCK {

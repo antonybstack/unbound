@@ -249,6 +249,11 @@ pub fn predict_local(
         };
         return;
     }
+    if control.hitstop > 0.0 {
+        transform.translation.y = PLAYER_HEIGHT * 0.5;
+        transform.rotation = Quat::from_rotation_y(control.yaw);
+        return;
+    }
     let speed = if control.pred_action == ACTION_DODGE {
         DODGE_SPEED
     } else if (control.buttons & BTN_SPRINT) != 0 && control.pred_stamina > 1.0 {
