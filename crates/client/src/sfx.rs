@@ -92,12 +92,13 @@ pub fn play_local_sfx(
         commands.spawn((AudioPlayer::new(sfx.block.clone()), settings));
         control.sfx_draw = 0;
     }
-    if control.sfx_foot {
+    if control.sfx_foot != 0 {
+        let sprint = control.sfx_foot == 2;
         let mut settings = PlaybackSettings::DESPAWN;
-        settings.volume = bevy::audio::Volume::Linear(0.18);
-        settings.speed = 1.85;
+        settings.volume = bevy::audio::Volume::Linear(if sprint { 0.18 } else { 0.12 });
+        settings.speed = if sprint { 1.85 } else { 1.4 };
         commands.spawn((AudioPlayer::new(sfx.gather.clone()), settings));
-        control.sfx_foot = false;
+        control.sfx_foot = 0;
     }
     if control.sfx_spawn {
         let mut settings = PlaybackSettings::DESPAWN;
