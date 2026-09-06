@@ -65,6 +65,7 @@ pub struct ControlState {
     pub sfx_level: bool,
     pub lock_pulse: f32,
     pub shot_kick: f32,
+    pub pip_pulse: f32,
 }
 
 impl Default for ControlState {
@@ -106,6 +107,7 @@ impl Default for ControlState {
             sfx_level: false,
             lock_pulse: 0.0,
             shot_kick: 0.0,
+            pip_pulse: 0.0,
         }
     }
 }
@@ -183,6 +185,7 @@ pub fn update_camera(
     control.shake = (control.shake - dt).max(0.0);
     control.lock_pulse = (control.lock_pulse - dt).max(0.0);
     control.shot_kick = (control.shot_kick - dt).max(0.0);
+    control.pip_pulse = (control.pip_pulse - dt).max(0.0);
 
     let mut focus = player;
     if control.lock_on {

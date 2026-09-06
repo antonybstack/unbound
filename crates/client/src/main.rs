@@ -456,8 +456,8 @@ fn setup_hud(mut commands: Commands) {
             position_type: PositionType::Absolute,
             left: Val::Px(-20.0),
             top: Val::Px(-20.0),
-            width: Val::Px(10.0),
-            height: Val::Px(10.0),
+            width: Val::Px(unbound_shared::DUMMY_PIP_SIZE),
+            height: Val::Px(unbound_shared::DUMMY_PIP_SIZE),
             ..default()
         },
         BackgroundColor(Color::srgba(0.85, 0.22, 0.16, 0.0)),
@@ -861,6 +861,7 @@ fn update_crosshair(
 }
 
 fn update_dummy_pip(
+    control: Res<ControlState>,
     camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
     dummy: Query<&GlobalTransform, With<DummyPawn>>,
     windows: Query<&Window>,
@@ -891,11 +892,16 @@ fn update_dummy_pip(
         bg.0.set_alpha(0.0);
         return;
     }
+    let t = control.pip_pulse;
+    let size = unbound_shared::dummy_pip_size(t);
     let x = screen.x.clamp(m, w - m);
     let y = screen.y.clamp(m, h - m);
-    node.left = Val::Px(x - 5.0);
-    node.top = Val::Px(y - 5.0);
-    bg.0 = Color::srgba(0.85, 0.22, 0.16, 0.9);
+    node.width = Val::Px(size);
+    node.height = Val::Px(size);
+    node.left = Val::Px(x - size * 0.5);
+    node.top = Val::Px(y - size * 0.5);
+    let (r, g, b, a) = unbound_shared::dummy_pip_tint(true, t);
+    bg.0 = Color::srgba(r, g, b, a);
 }
 
 fn update_hotbar(

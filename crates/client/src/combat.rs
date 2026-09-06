@@ -250,6 +250,7 @@ pub fn sync_dummy(
                 msg.new.pending_hit,
             ) {
                 control.sfx_dummy = if kind == ACTION_HEAVY { 2 } else { 1 };
+                control.pip_pulse = unbound_shared::DUMMY_PIP_PULSE_TIME;
             }
             if death_started(pose.alive, msg.new.alive) {
                 control.sfx_death = true;

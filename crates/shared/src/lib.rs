@@ -671,6 +671,30 @@ mod tests {
     }
 
     #[test]
+    fn dummy_pip_pulses_when_a_swing_starts() {
+        assert!(DUMMY_PIP_PULSE_TIME >= 0.16 && DUMMY_PIP_PULSE_TIME <= 0.24);
+        let rest = dummy_pip_size(0.0);
+        let pop = dummy_pip_size(DUMMY_PIP_PULSE_TIME);
+        assert!((rest - DUMMY_PIP_SIZE).abs() < 1e-4);
+        assert!(pop > rest);
+        assert!((pop - (DUMMY_PIP_SIZE + DUMMY_PIP_PULSE_EXTRA)).abs() < 1e-4);
+        assert!(pop >= 14.0 && pop <= 20.0);
+        let mid = dummy_pip_size(DUMMY_PIP_PULSE_TIME * 0.5);
+        assert!(mid > rest && mid < pop);
+        assert!((dummy_pip_size(-0.5) - rest).abs() < 1e-4);
+        assert!((dummy_pip_size(DUMMY_PIP_PULSE_TIME * 2.0) - pop).abs() < 1e-4);
+        let (_, _, _, hidden) = dummy_pip_tint(false, DUMMY_PIP_PULSE_TIME);
+        assert!(hidden.abs() < 1e-4);
+        let (rr, rg, rb, ra) = dummy_pip_tint(true, 0.0);
+        let (kr, kg, kb, ka) = dummy_pip_tint(true, DUMMY_PIP_PULSE_TIME);
+        assert!((ra - DUMMY_PIP_ALPHA).abs() < 1e-4);
+        assert!(ka > ra);
+        assert!(kr >= rr && kg >= rg && kb >= rb);
+        assert!((dummy_pip_pulse(0.0)).abs() < 1e-4);
+        assert!((dummy_pip_pulse(DUMMY_PIP_PULSE_TIME) - 1.0).abs() < 1e-4);
+    }
+
+    #[test]
     fn camera_push_out_leaves_the_shell() {
         let (x, y, z) = camera_push_out(0.1, 0.8, 0.0, 0.0, 0.8, 0.0, 1.0);
         let d = (x * x + (y - 0.8) * (y - 0.8) + z * z).sqrt();

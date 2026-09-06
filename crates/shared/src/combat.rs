@@ -285,6 +285,10 @@ pub const CROSSHAIR_KICK_TIME: f32 = 0.16;
 pub const CROSSHAIR_BORDER: f32 = 1.5;
 pub const CROSSHAIR_KICK_EXTRA: f32 = 1.6;
 pub const CROSSHAIR_ALPHA: f32 = 0.85;
+pub const DUMMY_PIP_SIZE: f32 = 10.0;
+pub const DUMMY_PIP_PULSE_TIME: f32 = 0.2;
+pub const DUMMY_PIP_PULSE_EXTRA: f32 = 8.0;
+pub const DUMMY_PIP_ALPHA: f32 = 0.9;
 pub const HYPERARMOR_FLASH_TIME: f32 = 0.18;
 pub const HYPERARMOR_FLASH_EMISSIVE: f32 = 8.0;
 pub const HYPERARMOR_FLASH_SCALE: f32 = 0.1;
@@ -464,6 +468,31 @@ pub fn crosshair_tint(drawn: bool, t: f32) -> (f32, f32, f32, f32) {
         0.95 + k * 0.05,
         0.88 + k * 0.12,
         CROSSHAIR_ALPHA + k * (1.0 - CROSSHAIR_ALPHA),
+    )
+}
+
+/// 1 at dummy swing start, 0 at rest. Quadratic ease so the pip snaps then settles.
+pub fn dummy_pip_pulse(t: f32) -> f32 {
+    let a = (t / DUMMY_PIP_PULSE_TIME).clamp(0.0, 1.0);
+    a * a
+}
+
+/// Edge marker px after a dummy swing starts. Large at t=DUMMY_PIP_PULSE_TIME, rest at 0.
+pub fn dummy_pip_size(t: f32) -> f32 {
+    DUMMY_PIP_SIZE + dummy_pip_pulse(t) * DUMMY_PIP_PULSE_EXTRA
+}
+
+/// Rest rust at 0.9; pulse goes hot and opaque. On-screen stays 0.
+pub fn dummy_pip_tint(visible: bool, t: f32) -> (f32, f32, f32, f32) {
+    if !visible {
+        return (0.85, 0.22, 0.16, 0.0);
+    }
+    let k = dummy_pip_pulse(t);
+    (
+        0.85 + k * 0.15,
+        0.22 + k * 0.50,
+        0.16 + k * 0.20,
+        DUMMY_PIP_ALPHA + k * (1.0 - DUMMY_PIP_ALPHA),
     )
 }
 
