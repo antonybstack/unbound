@@ -175,11 +175,7 @@ fn think_fight(
     let yaw = (-(tx - me.x)).atan2(-(tz - me.z));
     let swinging = action == ACTION_LIGHT || action == ACTION_HEAVY;
     let loadout = if ranged { LOADOUT_BOW } else { LOADOUT_SWORD };
-    let in_range = if ranged {
-        dist < 12.0
-    } else {
-        dist < 2.15
-    };
+    let in_range = if ranged { dist < 12.0 } else { dist < 2.15 };
     let dir_z = if ranged {
         if dist > 9.0 {
             1.0

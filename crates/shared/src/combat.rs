@@ -152,6 +152,15 @@ pub const DUMMY_HEAVY_DAMAGE: f32 = 20.0;
 pub const DUMMY_KEEP_OUT: f32 = 1.75;
 pub const DUMMY_APPROACH: f32 = 2.35;
 
+/// Sheathed wanderers are world-mode (gather, walk). The dummy only hunts drawn
+/// weapons, or anyone who already stepped into strike range.
+pub fn dummy_should_chase(drawn: bool, dist: f32) -> bool {
+    if dist <= DUMMY_STRIKE_RANGE {
+        return true;
+    }
+    drawn && dist < DUMMY_AGGRO_RANGE
+}
+
 pub const CAM_SHEATHED: f32 = 6.8;
 pub const CAM_DRAWN: f32 = 4.35;
 pub const CAM_LOCK: f32 = 5.15;

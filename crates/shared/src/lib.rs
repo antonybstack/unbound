@@ -452,4 +452,12 @@ mod tests {
             assert!(node.x.abs() < 12.0);
         }
     }
+
+    #[test]
+    fn dummy_ignores_sheathed_gatherers() {
+        assert!(dummy_should_chase(true, 8.0));
+        assert!(!dummy_should_chase(false, 8.0));
+        assert!(dummy_should_chase(false, 2.0));
+        assert!(dummy_should_chase(true, 2.0));
+    }
 }

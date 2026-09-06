@@ -490,6 +490,8 @@ fn update_hud(
                 if vitals.node_kind == 1 { "ore" } else { "wood" },
                 vitals.node_dist
             )
+        } else if !control.drawn && vitals.dummy_dist > unbound_shared::DUMMY_STRIKE_RANGE {
+            "sheathed — dummy hunts drawn steel\n".into()
         } else {
             String::new()
         };

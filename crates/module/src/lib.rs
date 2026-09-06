@@ -595,6 +595,9 @@ fn tick_dummy(ctx: &ReducerContext) {
             continue;
         }
         let d = dist_xz(dummy.x, dummy.z, p.x, p.z);
+        if !unbound_shared::dummy_should_chase(p.drawn, d) {
+            continue;
+        }
         if nearest.map(|(nd, _, _, _)| d < nd).unwrap_or(true) {
             let yaw = (-(p.x - dummy.x)).atan2(-(p.z - dummy.z));
             nearest = Some((d, p.x, p.z, yaw));

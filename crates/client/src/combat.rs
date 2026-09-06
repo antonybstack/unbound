@@ -90,6 +90,7 @@ pub struct LocalVitals {
     pub alive: bool,
     pub dummy_hp: f32,
     pub dummy_alive: bool,
+    pub dummy_dist: f32,
     pub node_kind: u8,
     pub node_dist: f32,
     pub others: String,
@@ -112,6 +113,7 @@ impl Default for LocalVitals {
             alive: true,
             dummy_hp: MAX_HP,
             dummy_alive: true,
+            dummy_dist: 999.0,
             node_kind: 0,
             node_dist: 999.0,
             others: String::new(),
@@ -301,6 +303,11 @@ pub fn update_nameplates(
             node.top = Val::Px(-80.0);
             continue;
         };
+        // Keep plates out of the top-left HUD and off-screen.
+        if screen.x < 400.0 && screen.y < 150.0 || screen.y < 0.0 || screen.x < 0.0 {
+            node.top = Val::Px(-80.0);
+            continue;
+        }
         node.left = Val::Px(screen.x - 28.0);
         node.top = Val::Px(screen.y - 18.0);
         text.0 = if alive {
@@ -467,9 +474,17 @@ pub fn sync_vitals(
 
     vitals.dummy_hp = MAX_HP;
     vitals.dummy_alive = true;
+    vitals.dummy_dist = 999.0;
+    let me_xz = local
+        .single()
+        .ok()
+        .map(|t| (t.translation.x, t.translation.z));
     for d in conn.db().dummy().iter() {
         vitals.dummy_hp = d.hp;
         vitals.dummy_alive = d.alive;
+        if let Some((x, z)) = me_xz {
+            vitals.dummy_dist = (x - d.x).hypot(z - d.z);
+        }
     }
 
     let apply_char = |vitals: &mut LocalVitals, c: &Character| {
