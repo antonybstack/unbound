@@ -495,6 +495,12 @@ pub fn remote_melee_lunge_dust(
         && range <= REMOTE_DODGE_DUST_RANGE
 }
 
+/// Walk-out just started. True only on the action rising edge into spawn so
+/// grace ticks do not re-puff.
+pub fn spawn_started(prev_action: u8, new_action: u8) -> bool {
+    prev_action != ACTION_SPAWN && new_action == ACTION_SPAWN
+}
+
 /// Body just dropped. True only on the alive true→false edge so respawn and
 /// staying dead do not re-fire.
 pub fn death_started(prev_alive: bool, new_alive: bool) -> bool {

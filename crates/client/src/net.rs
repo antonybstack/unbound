@@ -1,9 +1,9 @@
 use bevy::prelude::*;
 use bevy_stdb::prelude::*;
 use unbound_shared::{
-    death_started, integrate, life_started, merge_input_buttons, move_lock, ACTION_DEAD,
-    ACTION_DODGE, ACTION_HIT, ACTION_NONE, ACTION_SPAWN, BTN_SPRINT, DODGE_SPEED, INPUT_SEND_HZ,
-    MOVE_SPEED, PLAYER_HEIGHT, RECONCILE_SNAP, SPRINT_SPEED, TICK_HZ,
+    death_started, integrate, life_started, merge_input_buttons, move_lock, spawn_started,
+    ACTION_DEAD, ACTION_DODGE, ACTION_HIT, ACTION_NONE, ACTION_SPAWN, BTN_SPRINT, DODGE_SPEED,
+    INPUT_SEND_HZ, MOVE_SPEED, PLAYER_HEIGHT, RECONCILE_SNAP, SPRINT_SPEED, TICK_HZ,
 };
 
 use crate::camera::ControlState;
@@ -126,6 +126,9 @@ pub fn bind_local_player(
     transform.rotation = Quat::from_rotation_y(player.yaw);
     control.yaw = player.yaw;
     control.pred_stamina = player.stamina;
+    if spawn_started(control.pred_action, player.action) {
+        control.puff_spawn = true;
+    }
     control.pred_action = player.action;
     control.pred_ticks = player.action_ticks as f32;
     control.loadout = player.loadout;
@@ -203,6 +206,10 @@ pub fn apply_player_updates(
             if local.is_none() && life_started(pose.alive, msg.new.alive) {
                 control.sfx_rise = true;
             }
+            if local.is_some() && spawn_started(pose.action, msg.new.action) {
+                control.sfx_spawn = true;
+                control.puff_spawn = true;
+            }
             pose.apply_row(&msg.new);
             if local.is_some() {
                 // Keep prediction authoritative unless we have clearly desynced.
@@ -211,9 +218,6 @@ pub fn apply_player_updates(
                 let server = Vec3::new(msg.new.x, 0.0, msg.new.z);
                 let dead = !msg.new.alive || msg.new.action == ACTION_DEAD;
                 let spawning = msg.new.action == ACTION_SPAWN;
-                if spawning && control.pred_action != ACTION_SPAWN {
-                    control.sfx_spawn = true;
-                }
                 if dead || spawning || predicted.distance(server) > RECONCILE_SNAP {
                     transform.translation.x = msg.new.x;
                     transform.translation.z = msg.new.z;

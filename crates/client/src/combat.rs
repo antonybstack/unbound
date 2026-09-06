@@ -8,12 +8,12 @@ use unbound_shared::{
     invulnerable_for, life_started, loadout, melee_lunge_dt, melee_lunge_dust_radius,
     merge_input_buttons, nameplate_alpha, node_mesh_scale, node_respawned, node_restore_mix,
     predicted_busy_ticks, predicted_release_ticks, remote_dodge_dust, remote_melee_lunge_dust,
-    start_drawn_action, start_gather_action, wanderer_hp_bar_hit, wanderer_hp_bar_tint,
-    weapon_extra_rotation, ACTION_BLOCK, ACTION_DEAD, ACTION_DODGE, ACTION_HEAVY, ACTION_HIT,
-    ACTION_LIGHT, ACTION_NONE, BTN_BLOCK, BTN_DODGE, BTN_HEAVY, BTN_LIGHT, BTN_SPRINT,
-    DEATH_DUST_RADIUS, DODGE_SPEED, GATHER_RANGE, HP_FLASH_TIME, HYPERARMOR_FLASH_TIME, MAX_HP,
-    MAX_STAMINA, MOVE_SPEED, PLAYER_HEIGHT, SHOT_CEILING_Y, SHOT_GROUND_Y, SHOT_SPAWN_Y,
-    SPRINT_STAMINA_PER_SEC, STAMINA_REGEN_PER_SEC, TICK_HZ,
+    spawn_started, start_drawn_action, start_gather_action, wanderer_hp_bar_hit,
+    wanderer_hp_bar_tint, weapon_extra_rotation, ACTION_BLOCK, ACTION_DEAD, ACTION_DODGE,
+    ACTION_HEAVY, ACTION_HIT, ACTION_LIGHT, ACTION_NONE, BTN_BLOCK, BTN_DODGE, BTN_HEAVY,
+    BTN_LIGHT, BTN_SPRINT, DEATH_DUST_RADIUS, DODGE_SPEED, GATHER_RANGE, HP_FLASH_TIME,
+    HYPERARMOR_FLASH_TIME, MAX_HP, MAX_STAMINA, MOVE_SPEED, PLAYER_HEIGHT, SHOT_CEILING_Y,
+    SHOT_GROUND_Y, SHOT_SPAWN_Y, SPRINT_STAMINA_PER_SEC, STAMINA_REGEN_PER_SEC, TICK_HZ,
 };
 
 use crate::camera::ControlState;
@@ -1126,6 +1126,23 @@ pub fn puff_remote_dodge(
     }
 }
 
+pub fn puff_local_spawn(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut control: ResMut<ControlState>,
+    local: Query<&Transform, With<LocalPlayer>>,
+) {
+    if !control.puff_spawn {
+        return;
+    }
+    control.puff_spawn = false;
+    let Ok(tf) = local.single() else {
+        return;
+    };
+    spawn_dust(&mut commands, &mut meshes, &mut materials, tf.translation);
+}
+
 pub fn apply_predicted_starts(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -1168,6 +1185,9 @@ pub fn apply_predicted_starts(
     };
     let prev = control.pred_action;
     control.pred_action = start.action;
+    if spawn_started(prev, start.action) {
+        control.puff_spawn = true;
+    }
     control.pred_ticks = predicted_busy_ticks(&start) as f32;
     control.pred_loadout = if start.action == unbound_shared::ACTION_GATHER {
         control.pred_loadout

@@ -739,6 +739,19 @@ mod tests {
     }
 
     #[test]
+    fn spawn_dust_fires_once_on_grace_start() {
+        assert!(spawn_started(ACTION_NONE, ACTION_SPAWN));
+        assert!(spawn_started(ACTION_DEAD, ACTION_SPAWN));
+        assert!(spawn_started(ACTION_HIT, ACTION_SPAWN));
+        assert!(!spawn_started(ACTION_SPAWN, ACTION_SPAWN));
+        assert!(!spawn_started(ACTION_SPAWN, ACTION_NONE));
+        assert!(!spawn_started(ACTION_NONE, ACTION_NONE));
+        assert!(!spawn_started(ACTION_DEAD, ACTION_DEAD));
+        assert!(!spawn_started(ACTION_NONE, ACTION_LIGHT));
+        assert!(!spawn_started(ACTION_SPAWN, ACTION_DEAD));
+    }
+
+    #[test]
     fn death_thud_fires_once_when_alive_falls() {
         assert!(death_started(true, false));
         assert!(!death_started(false, false));
