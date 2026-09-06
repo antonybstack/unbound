@@ -273,7 +273,7 @@ pub fn dummy_should_chase(drawn: bool, dist: f32) -> bool {
 pub const CAM_SHEATHED: f32 = 6.8;
 pub const CAM_DRAWN: f32 = 4.35;
 pub const CAM_LOCK: f32 = 5.15;
-pub const CAM_SPRINT_PULL: f32 = 0.85;
+pub const CAM_SPRINT_EXTRA: f32 = 0.55;
 pub const CAM_LOCK_MIX: f32 = 0.32;
 pub const CAM_SHOULDER: f32 = 0.42;
 pub const CAM_SHAKE_TIME: f32 = 0.16;
@@ -363,7 +363,7 @@ pub fn camera_distance(drawn: bool, lock_on: bool, sprinting: bool) -> f32 {
         CAM_SHEATHED
     };
     if sprinting {
-        (base - CAM_SPRINT_PULL).max(3.2)
+        base + CAM_SPRINT_EXTRA
     } else {
         base
     }

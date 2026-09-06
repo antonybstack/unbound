@@ -572,7 +572,28 @@ mod tests {
         assert!((camera_distance(false, false, false) - CAM_SHEATHED).abs() < 1e-4);
         assert!(camera_distance(true, false, false) < camera_distance(false, false, false));
         assert!((camera_distance(true, true, false) - CAM_LOCK).abs() < 1e-4);
-        assert!(camera_distance(false, false, true) < camera_distance(false, false, false));
+    }
+
+    #[test]
+    fn camera_opens_when_sprinting() {
+        let walk = camera_distance(false, false, false);
+        let run = camera_distance(false, false, true);
+        let extra = run - walk;
+        assert!(extra > 0.0);
+        assert!((extra - CAM_SPRINT_EXTRA).abs() < 1e-4);
+        assert!(extra >= 0.4 && extra <= 0.8);
+        assert!(
+            (camera_distance(true, false, true) - camera_distance(true, false, false)
+                - CAM_SPRINT_EXTRA)
+                .abs()
+                < 1e-4
+        );
+        assert!(
+            (camera_distance(false, true, true) - camera_distance(false, true, false)
+                - CAM_SPRINT_EXTRA)
+                .abs()
+                < 1e-4
+        );
     }
 
     #[test]

@@ -4,8 +4,8 @@ use bevy::window::{CursorGrabMode, CursorOptions};
 
 use crate::{LocalPlayer, MainCamera};
 use unbound_shared::{
-    camera_distance, camera_push_out, camera_shake_amp, lock_focus_xz, ACTION_NONE,
-    CAM_BLOCK_RADIUS, CAM_SHEATHED, CAM_SHOULDER, MAX_STAMINA, PLAYER_HEIGHT,
+    camera_distance, camera_push_out, camera_shake_amp, lock_focus_xz, ACTION_DEAD, ACTION_DODGE,
+    ACTION_NONE, CAM_BLOCK_RADIUS, CAM_SHEATHED, CAM_SHOULDER, MAX_STAMINA, PLAYER_HEIGHT,
 };
 
 #[derive(Component, Clone, Copy)]
@@ -166,8 +166,12 @@ pub fn update_camera(
         .ok()
         .map(|t| t.translation)
         .unwrap_or(Vec3::new(0.0, PLAYER_HEIGHT * 0.5, 0.0));
-    let sprinting =
-        (control.buttons & unbound_shared::BTN_SPRINT) != 0 && control.pred_stamina > 1.0;
+    let can_step = control.pred_action != ACTION_DODGE
+        && control.pred_action != ACTION_DEAD
+        && !unbound_shared::move_lock(control.pred_action);
+    let sprinting = (control.buttons & unbound_shared::BTN_SPRINT) != 0
+        && control.pred_stamina > 1.0
+        && can_step;
     let want = camera_distance(control.drawn, control.lock_on, sprinting);
     let blend = (8.0 * dt).min(1.0);
     control.cam_dist += (want - control.cam_dist) * blend;
