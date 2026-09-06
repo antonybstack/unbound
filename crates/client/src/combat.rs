@@ -2,8 +2,8 @@ use bevy::prelude::*;
 use bevy_stdb::prelude::*;
 use unbound_shared::{
     aim_dir, death_started, dodge_burst_dt, dodge_dir, dummy_body_scale, dummy_club_pitch,
-    dummy_heavy_slammed, dummy_telegraph_started, dummy_windup_ticks, hyperarmor,
-    hyperarmor_flash_emissive, hyperarmor_flash_scale, incoming_hit_shake, integrate,
+    dummy_heavy_slammed, dummy_hp_bar_hit, dummy_telegraph_started, dummy_windup_ticks, hp_bar_tint,
+    hyperarmor, hyperarmor_flash_emissive, hyperarmor_flash_scale, incoming_hit_shake, integrate,
     invulnerable_for, life_started, loadout, melee_lunge_dt, merge_input_buttons, nameplate_alpha,
     node_mesh_scale, node_respawned, node_restore_mix, predicted_busy_ticks,
     predicted_release_ticks, start_drawn_action, start_gather_action, weapon_extra_rotation,
@@ -135,6 +135,11 @@ pub struct GatherHintFlash {
 
 #[derive(Resource, Default)]
 pub struct DummyArmorFlash {
+    pub t: f32,
+}
+
+#[derive(Resource, Default)]
+pub struct DummyHpFlash {
     pub t: f32,
 }
 
@@ -333,6 +338,7 @@ pub fn interpolate_dummy(
 
 pub fn pose_hp_bars(
     time: Res<Time>,
+    dummy_hp_flash: Res<DummyHpFlash>,
     camera: Query<&GlobalTransform, With<MainCamera>>,
     dummy: Query<(&DummyPose, &GlobalTransform), With<DummyPawn>>,
     remotes: Query<(&ServerPose, &GlobalTransform), With<RemotePlayer>>,
@@ -351,10 +357,10 @@ pub fn pose_hp_bars(
     let dt = time.delta_secs();
     for (parent, mut tf, mut bar, mat) in &mut bars {
         let parent_e = parent.parent();
-        let (hp, alive, parent_tf) = if let Ok((pose, g)) = dummy.get(parent_e) {
-            (pose.hp, pose.alive, *g)
+        let (hp, alive, parent_tf, is_dummy) = if let Ok((pose, g)) = dummy.get(parent_e) {
+            (pose.hp, pose.alive, *g, true)
         } else if let Ok((pose, g)) = remotes.get(parent_e) {
-            (pose.hp, pose.alive, *g)
+            (pose.hp, pose.alive, *g, false)
         } else {
             continue;
         };
@@ -369,7 +375,14 @@ pub fn pose_hp_bars(
             .looking_at(cam_local, Vec3::Y)
             .with_scale(Vec3::new(ratio, 1.0, 1.0));
         if let Some(mut m) = materials.get_mut(&mat.0) {
-            m.base_color.set_alpha(bar.fade);
+            if is_dummy {
+                let (r, g, b) = hp_bar_tint(dummy_hp_flash.t);
+                let mut color = Color::srgb(r, g, b);
+                color.set_alpha(bar.fade);
+                m.base_color = color;
+            } else {
+                m.base_color.set_alpha(bar.fade);
+            }
             m.alpha_mode = if bar.fade < 0.999 {
                 AlphaMode::Blend
             } else {
@@ -826,6 +839,7 @@ pub fn flash_hits(
     conn: Option<Res<StdbConn>>,
     mut flash: ResMut<HitFlash>,
     mut armor: ResMut<DummyArmorFlash>,
+    mut dummy_hp: ResMut<DummyHpFlash>,
     mut control: ResMut<ControlState>,
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -857,6 +871,9 @@ pub fn flash_hits(
                         .hitstop
                         .max(if row.damage >= 20.0 { 0.10 } else { 0.045 });
             }
+        }
+        if dummy_hp_bar_hit(row.kind, row.target_is_dummy) {
+            dummy_hp.t = HP_FLASH_TIME;
         }
         if row.kind == 1 && row.target_is_dummy {
             if let Ok(pose) = dummy.single() {
@@ -979,11 +996,15 @@ pub fn tick_hit_flash(
 pub fn tick_dummy_armor_flash(
     time: Res<Time>,
     mut flash: ResMut<DummyArmorFlash>,
+    mut dummy_hp: ResMut<DummyHpFlash>,
     dummy: Query<&MeshMaterial3d<StandardMaterial>, With<DummyPawn>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     if flash.t > 0.0 {
         flash.t = (flash.t - time.delta_secs()).max(0.0);
+    }
+    if dummy_hp.t > 0.0 {
+        dummy_hp.t = (dummy_hp.t - time.delta_secs()).max(0.0);
     }
     let Ok(mat) = dummy.single() else {
         return;

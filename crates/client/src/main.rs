@@ -15,8 +15,8 @@ use unbound_shared::{
 
 use crate::camera::{ControlState, LockReticle, update_camera, update_cursor};
 use crate::combat::{
-    DummyArmorFlash, DummyPawn, DummyPose, GatherHintFlash, HitFlash, LocalVitals, StamFlash,
-    WeaponState,
+    DummyArmorFlash, DummyHpFlash, DummyPawn, DummyPose, GatherHintFlash, HitFlash, LocalVitals,
+    StamFlash, WeaponState,
     apply_predicted_starts, flash_hits, fly_predicted_shots, fly_shots, interpolate_dummy,
     pose_dummy_club, pose_hp_bars, pose_shields, pose_weapons, refresh_remote_weapons,
     refresh_weapon, spawn_predicted_shots, subscribe_world, sync_dummy, sync_nameplates,
@@ -119,6 +119,7 @@ fn main() {
         .insert_resource(StamFlash::default())
         .insert_resource(GatherHintFlash::default())
         .insert_resource(DummyArmorFlash::default())
+        .insert_resource(DummyHpFlash::default())
         .insert_resource(HelpOverlay::default())
         .add_systems(Startup, (setup_scene, connect, setup_hud, load_sfx))
         .add_systems(
@@ -736,6 +737,7 @@ fn update_hud(
     mut stam_flash: ResMut<StamFlash>,
     mut gather_flash: ResMut<GatherHintFlash>,
     hit_flash: Res<HitFlash>,
+    dummy_hp_flash: Res<DummyHpFlash>,
     control: Res<ControlState>,
     vitals: Res<LocalVitals>,
     mut title: Query<&mut Text, With<HudTitle>>,
@@ -760,7 +762,7 @@ fn update_hud(
     mut bars: ParamSet<(
         Query<(&mut Node, &mut BackgroundColor), With<HpFill>>,
         Query<(&mut Node, &mut BackgroundColor), With<StamFill>>,
-        Query<&mut Node, With<DummyHpFill>>,
+        Query<(&mut Node, &mut BackgroundColor), With<DummyHpFill>>,
         Query<&mut Node, With<XpFill>>,
         Query<
             (&mut Text, &mut TextColor, &mut Node),
@@ -826,8 +828,10 @@ fn update_hud(
         let mix = (stam_flash.t / 0.22).clamp(0.0, 1.0);
         bg.0 = Color::srgb(0.82, 0.72, 0.22).mix(&Color::srgb(0.95, 0.22, 0.16), mix);
     }
-    if let Ok(mut fill) = bars.p2().single_mut() {
+    if let Ok((mut fill, mut bg)) = bars.p2().single_mut() {
         fill.width = Val::Percent((100.0 * (vitals.dummy_hp / MAX_HP)).clamp(0.0, 100.0));
+        let (r, g, b) = unbound_shared::hp_bar_tint(dummy_hp_flash.t);
+        bg.0 = Color::srgb(r, g, b);
     }
     let (xp_skill, xp_val) = if in_range {
         (SKILL_GATHERING, vitals.gather_xp)

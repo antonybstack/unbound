@@ -749,6 +749,11 @@ pub fn hp_bar_tint(t: f32) -> (f32, f32, f32) {
     )
 }
 
+/// Dummy HUD and world bars flash on a hit or kill. Player chips use HitFlash.
+pub fn dummy_hp_bar_hit(kind: u8, target_is_dummy: bool) -> bool {
+    target_is_dummy && (kind == 1 || kind == 2)
+}
+
 pub fn hp_regen_ok(action: u8) -> bool {
     !action_busy(action) && action != ACTION_BLOCK
 }

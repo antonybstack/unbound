@@ -935,6 +935,20 @@ mod tests {
     }
 
     #[test]
+    fn dummy_hp_bar_flashes_when_dummy_is_hit() {
+        assert!(dummy_hp_bar_hit(1, true));
+        assert!(dummy_hp_bar_hit(2, true));
+        assert!(!dummy_hp_bar_hit(1, false));
+        assert!(!dummy_hp_bar_hit(2, false));
+        assert!(!dummy_hp_bar_hit(3, true));
+        assert!(!dummy_hp_bar_hit(5, true));
+        assert!(!dummy_hp_bar_hit(6, true));
+        let (rr, rg, rb) = hp_bar_tint(0.0);
+        let (kr, kg, kb) = hp_bar_tint(HP_FLASH_TIME);
+        assert!(kr > rr && kg > rg && kb > rb);
+    }
+
+    #[test]
     fn gather_hint_pulses_when_sheathed_range_enters() {
         assert!((GATHER_HINT_FLASH_TIME - 0.2).abs() < 1e-4);
         assert!(gather_hint_in_range(true, GATHER_RANGE));
