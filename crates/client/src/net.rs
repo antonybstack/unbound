@@ -361,7 +361,7 @@ fn spawn_pawn(
     } else {
         commands
             .entity(parent)
-            .insert((RemotePlayer, crate::camera::CamBlock));
+            .insert((RemotePlayer, crate::camera::CamBlock::default()));
         let bar = commands
             .spawn((
                 Mesh3d(meshes.add(Cuboid::new(1.0, 0.1, 0.04))),

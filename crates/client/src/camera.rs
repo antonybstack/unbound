@@ -8,8 +8,18 @@ use unbound_shared::{
     camera_distance, camera_push_out, camera_shake_amp, lock_focus_xz,
 };
 
-#[derive(Component)]
-pub struct CamBlock;
+#[derive(Component, Clone, Copy)]
+pub struct CamBlock {
+    pub radius: f32,
+}
+
+impl Default for CamBlock {
+    fn default() -> Self {
+        Self {
+            radius: CAM_BLOCK_RADIUS,
+        }
+    }
+}
 
 const LOOK_SENS: f32 = 0.004;
 
@@ -104,9 +114,8 @@ pub fn update_camera(
     mut camera: Query<&mut Transform, With<MainCamera>>,
     local: Query<&Transform, (With<LocalPlayer>, Without<MainCamera>)>,
     blockers: Query<
-        &Transform,
+        (&Transform, &CamBlock),
         (
-            With<CamBlock>,
             Without<MainCamera>,
             Without<LocalPlayer>,
             Without<LockReticle>,
@@ -173,7 +182,7 @@ pub fn update_camera(
     };
     let offset = rot * (Vec3::new(0.0, 0.0, control.cam_dist) + shoulder);
     camera.translation = focus + offset;
-    for body in &blockers {
+    for (body, block) in &blockers {
         let p = body.translation;
         let (x, y, z) = camera_push_out(
             camera.translation.x,
@@ -182,7 +191,7 @@ pub fn update_camera(
             p.x,
             p.y,
             p.z,
-            CAM_BLOCK_RADIUS,
+            block.radius,
         );
         camera.translation = Vec3::new(x, y, z);
     }

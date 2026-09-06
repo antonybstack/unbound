@@ -1440,7 +1440,7 @@ fn spawn_dummy(
             Transform::from_xyz(dummy.x, PLAYER_HEIGHT * 0.5, dummy.z)
                 .with_rotation(Quat::from_rotation_y(dummy.yaw)),
             DummyPawn,
-            crate::camera::CamBlock,
+            crate::camera::CamBlock::default(),
             DummyPose {
                 x: dummy.x,
                 z: dummy.z,
@@ -1571,6 +1571,9 @@ fn spawn_node(
                 Vec3::ONE
             }),
             NodePawn { id: node.id },
+            crate::camera::CamBlock {
+                radius: if node.kind == 1 { 0.7 } else { 0.9 },
+            },
         ))
         .id();
     if node.kind != 1 {

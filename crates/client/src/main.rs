@@ -254,6 +254,7 @@ fn setup_scene(
             Mesh3d(pillar.clone()),
             MeshMaterial3d(pillar_mat.clone()),
             Transform::from_xyz(x, 2.0, z),
+            crate::camera::CamBlock { radius: 1.35 },
         ));
     }
 
