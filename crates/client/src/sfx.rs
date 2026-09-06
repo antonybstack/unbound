@@ -117,6 +117,15 @@ pub fn play_local_sfx(
         commands.spawn((AudioPlayer::new(sfx.gather.clone()), settings));
         control.sfx_gather = false;
     }
+    if control.sfx_deplete != 0 {
+        // Last charge already gathered. Ore is a higher stone crack; wood a lower snap.
+        let ore = control.sfx_deplete == 2;
+        let mut settings = PlaybackSettings::DESPAWN;
+        settings.volume = bevy::audio::Volume::Linear(if ore { 0.44 } else { 0.38 });
+        settings.speed = if ore { 1.28 } else { 0.7 };
+        commands.spawn((AudioPlayer::new(sfx.brk.clone()), settings));
+        control.sfx_deplete = 0;
+    }
     if control.sfx_block {
         // Predicted raise: air sweep. Rim clack stays on a blocked hit.
         let mut settings = PlaybackSettings::DESPAWN;

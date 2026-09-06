@@ -58,6 +58,7 @@ pub struct ControlState {
     pub sfx_dummy: u8,
     pub sfx_lock: i8,
     pub sfx_shot: u8,
+    pub sfx_deplete: u8,
 }
 
 impl Default for ControlState {
@@ -93,6 +94,7 @@ impl Default for ControlState {
             sfx_dummy: 0,
             sfx_lock: 0,
             sfx_shot: 0,
+            sfx_deplete: 0,
         }
     }
 }

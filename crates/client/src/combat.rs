@@ -107,6 +107,7 @@ pub struct DamageFloater {
 #[derive(Component)]
 pub struct NodePawn {
     pub id: u32,
+    pub charges: u8,
 }
 
 #[derive(Resource)]
@@ -470,12 +471,12 @@ pub fn sync_nodes(
     mut deletes: ReadDeleteMessage<GatherNode>,
     conn: Option<Res<StdbConn>>,
     time: Res<Time>,
-    control: Res<ControlState>,
+    mut control: ResMut<ControlState>,
     local: Query<&Transform, With<LocalPlayer>>,
     mut nodes: Query<
         (
             Entity,
-            &NodePawn,
+            &mut NodePawn,
             &mut Transform,
             &mut MeshMaterial3d<StandardMaterial>,
         ),
@@ -497,10 +498,12 @@ pub fn sync_nodes(
         spawn_node(&mut commands, &mut meshes, &mut materials, &msg.row);
     }
     for msg in updates.read() {
-        for (_e, node, mut transform, mat) in &mut nodes {
+        for (_e, mut node, mut transform, mat) in &mut nodes {
             if node.id != msg.new.id {
                 continue;
             }
+            let emptied = node.charges > 0 && msg.new.charges == 0;
+            node.charges = msg.new.charges;
             let depleted = msg.new.charges == 0;
             transform.scale = if depleted {
                 Vec3::new(1.0, 0.45, 1.0)
@@ -509,6 +512,30 @@ pub fn sync_nodes(
             };
             if let Some(mut m) = materials.get_mut(&mat.0) {
                 m.base_color = node_color(msg.new.kind, depleted);
+            }
+            if emptied {
+                let at = transform.translation;
+                let color = if msg.new.kind == 1 {
+                    Color::srgb(0.78, 0.84, 0.92)
+                } else {
+                    Color::srgb(0.62, 0.88, 0.42)
+                };
+                spawn_hit_spark(
+                    &mut commands,
+                    &mut meshes,
+                    &mut materials,
+                    at + Vec3::Y * 0.35,
+                    color,
+                );
+                spawn_hit_spark(
+                    &mut commands,
+                    &mut meshes,
+                    &mut materials,
+                    at + Vec3::new(0.22, 0.12, 0.08),
+                    color,
+                );
+                spawn_dust(&mut commands, &mut meshes, &mut materials, at);
+                control.sfx_deplete = if msg.new.kind == 1 { 2 } else { 1 };
             }
         }
     }
@@ -1600,7 +1627,10 @@ fn spawn_node(
             } else {
                 Vec3::ONE
             }),
-            NodePawn { id: node.id },
+            NodePawn {
+                id: node.id,
+                charges: node.charges,
+            },
             crate::camera::CamBlock {
                 radius: if node.kind == 1 { 0.7 } else { 0.9 },
             },
