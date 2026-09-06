@@ -95,52 +95,59 @@ fn main() {
         .add_systems(
             Update,
             (
-                (
-                    persist_on_connect,
-                    subscribe_world,
-                    spawn_pawns_from_cache,
-                    bind_local_player,
-                    apply_player_inserts,
-                    apply_player_updates,
-                    apply_player_deletes,
-                    interpolate_remotes,
-                    sync_dummy,
-                    tick_dummy_pose,
-                    interpolate_dummy,
-                    pose_hp_bars,
-                    sync_projectiles,
-                    fly_shots,
-                    sync_nodes,
-                    sync_vitals,
-                    flash_hits,
-                    update_floaters,
-                    sync_nameplates,
-                    update_nameplates,
-                )
-                    .chain(),
-                (
-                    tick_hit_flash,
-                    read_combat_input,
-                    apply_predicted_starts,
-                    tick_dust,
-                    tick_prediction,
-                    spawn_predicted_shots,
-                    fly_predicted_shots,
-                    predict_local,
-                    send_input,
-                    refresh_weapon,
-                    refresh_remote_weapons,
-                    pose_weapons,
-                    pose_shields,
-                    pose_dummy_club,
-                    update_cursor,
-                    update_camera,
-                    update_hud,
-                    update_crosshair,
-                    update_death_veil,
-                    update_hotbar,
-                )
-                    .chain(),
+                persist_on_connect,
+                subscribe_world,
+                spawn_pawns_from_cache,
+                bind_local_player,
+                apply_player_inserts,
+                apply_player_updates,
+                apply_player_deletes,
+                interpolate_remotes,
+                sync_dummy,
+                tick_dummy_pose,
+                interpolate_dummy,
+                pose_hp_bars,
+                sync_projectiles,
+                fly_shots,
+                sync_nodes,
+            )
+                .chain(),
+        )
+        .add_systems(
+            Update,
+            (
+                sync_vitals,
+                flash_hits,
+                update_floaters,
+                sync_nameplates,
+                update_nameplates,
+                update_dummy_pip,
+                tick_hit_flash,
+                read_combat_input,
+                apply_predicted_starts,
+                tick_dust,
+                tick_prediction,
+                spawn_predicted_shots,
+                fly_predicted_shots,
+                predict_local,
+                send_input,
+            )
+                .chain(),
+        )
+        .add_systems(
+            Update,
+            (
+                refresh_weapon,
+                refresh_remote_weapons,
+                pose_weapons,
+                pose_shields,
+                pose_dummy_club,
+                update_cursor,
+                update_camera,
+                update_hud,
+                update_crosshair,
+                update_death_veil,
+                update_hotbar,
             )
                 .chain(),
         )
@@ -171,6 +178,8 @@ struct DeathVeilText;
 struct LoadoutSlot {
     id: u8,
 }
+#[derive(Component)]
+struct DummyPip;
 #[derive(Component)]
 pub struct MainCamera;
 
@@ -373,6 +382,20 @@ fn setup_hud(mut commands: Commands) {
         BorderColor::all(Color::srgba(0.95, 0.95, 0.9, 0.0)),
         BackgroundColor(Color::NONE),
         Crosshair,
+    ));
+
+    commands.spawn((
+        Node {
+            position_type: PositionType::Absolute,
+            left: Val::Px(-20.0),
+            top: Val::Px(-20.0),
+            width: Val::Px(10.0),
+            height: Val::Px(10.0),
+            ..default()
+        },
+        BackgroundColor(Color::srgba(0.85, 0.22, 0.16, 0.0)),
+        Pickable::IGNORE,
+        DummyPip,
     ));
 
     commands
@@ -639,6 +662,44 @@ fn update_crosshair(control: Res<ControlState>, mut q: Query<&mut BorderColor, W
     };
     let alpha = if control.drawn { 0.85 } else { 0.0 };
     *border = BorderColor::all(Color::srgba(0.95, 0.95, 0.88, alpha));
+}
+
+fn update_dummy_pip(
+    camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
+    dummy: Query<&GlobalTransform, With<DummyPawn>>,
+    windows: Query<&Window>,
+    mut pip: Query<(&mut Node, &mut BackgroundColor), With<DummyPip>>,
+) {
+    let Ok((cam, cam_tf)) = camera.single() else {
+        return;
+    };
+    let Ok((mut node, mut bg)) = pip.single_mut() else {
+        return;
+    };
+    let Ok(dummy) = dummy.single() else {
+        bg.0.set_alpha(0.0);
+        return;
+    };
+    let Ok(window) = windows.single() else {
+        return;
+    };
+    let Ok(screen) = cam.world_to_viewport(cam_tf, dummy.translation() + Vec3::Y * 1.15) else {
+        bg.0.set_alpha(0.0);
+        return;
+    };
+    let w = window.width();
+    let h = window.height();
+    let m = 16.0;
+    let on_screen = screen.x > m && screen.x < w - m && screen.y > m && screen.y < h - m;
+    if on_screen {
+        bg.0.set_alpha(0.0);
+        return;
+    }
+    let x = screen.x.clamp(m, w - m);
+    let y = screen.y.clamp(m, h - m);
+    node.left = Val::Px(x - 5.0);
+    node.top = Val::Px(y - 5.0);
+    bg.0 = Color::srgba(0.85, 0.22, 0.16, 0.9);
 }
 
 fn update_hotbar(
